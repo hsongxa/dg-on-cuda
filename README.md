@@ -1,3 +1,4 @@
 # dg-on-cuda
-A CUDA implementation of the discontinuous galerkin method.
+A CUDA implementation of the Discontinuous Galerkin method.
+
 Code under construction...
