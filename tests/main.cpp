@@ -5,6 +5,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
   test_hello_world_kernel();
+  test_hello_world_template_kernel();
   // finish
   return 0;
 }

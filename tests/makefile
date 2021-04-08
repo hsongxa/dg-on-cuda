@@ -4,6 +4,7 @@ SRC_DIR := ../src
 VPATH := $(SRC_DIR)
 
 # CUDA root path
+# note that this version of CUDA only supports c++14
 CUDA_PATH := /usr/local/cuda-10.2
 
 # GPU
@@ -11,17 +12,17 @@ GPU_CARD := -arch=sm_72 # specify the proper device compute capability here
 
 # =========== CUDA part ===========
 NVCC := $(CUDA_PATH)/bin/nvcc
-NVCC_FLAGS := -O3 -dc -Xcompiler # separate compilation
+# separate compilation
+NVCC_FLAGS := -O3 -dc -Xcompiler
 ifeq ($(DEBUG),1)
   NVCC_FLAGS += -g3
 endif
-
 CUDA_LINK_FLAGS := -dlink
 
 CUDA_INCL := -I$(CUDA_PATH)/include
 CUDA_LIBS := -L$(CUDA_PATH)/lib64 -lcudart -lcublas -lcusparse
 
-CUDA_SRCS := $(wildcard $(SRC_DIR)/*.cu)
+CUDA_SRCS := $(wildcard *.cu) $(wildcard $(SRC_DIR)/*.cu)
 CUDA_OBJS := $(patsubst %.cu, %.o, $(notdir $(CUDA_SRCS)))
 
 # =========== C++ part ===========
@@ -50,7 +51,7 @@ $(EXEC): $(CUDA_OBJS) $(OBJS)
 	$(CC) $(INCL) $(CUDA_INCL) $(CFLAGS) -c $< -o $@
 
 %.o: %.cu
-	$(NVCC) $(GPU_CARD) $(NVCC_FLAGS) $(CUDA_INCL) -c $< -o $@
+	$(NVCC) $(GPU_CARD) $(NVCC_FLAGS) $(INCL) $(CUDA_INCL) -c $< -o $@
 
 clean:	
 	rm -f $(OBJS) $(EXEC) *.o
