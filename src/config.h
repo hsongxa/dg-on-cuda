@@ -22,19 +22,13 @@
  * SOFTWARE.
  **/
 
-#include <iostream>
-#include "unittests.h"
+#ifndef CONFIG_H
+#define CONFIG_H
 
-////////////////////////////////////////////////////////////////////////////////
-// Program main
-////////////////////////////////////////////////////////////////////////////////
-int main(int argc, char **argv) {
-  //test_hello_world_kernel();
-  //test_hello_world_template_kernel();
+//#define USE_CPU_ONLY
 
-  if (test_dense_matrix())
-    std::cout << "test_dense_matrix FAILED!!!" << std::endl;
+#define BEGIN_NAMESPACE namespace dgc {
+#define END_NAMESPACE }
 
-  // finish
-  return 0;
-}
+#endif
+

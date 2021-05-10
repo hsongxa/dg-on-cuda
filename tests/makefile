@@ -4,7 +4,6 @@ SRC_DIR := ../src
 VPATH := $(SRC_DIR)
 
 # CUDA root path
-# note that this version of CUDA only supports c++14
 CUDA_PATH := /usr/local/cuda-10.2
 
 # GPU
@@ -12,28 +11,30 @@ GPU_CARD := -arch=sm_72 # specify the proper device compute capability here
 
 # =========== CUDA part ===========
 NVCC := $(CUDA_PATH)/bin/nvcc
-# separate compilation
-NVCC_FLAGS := -O3 -dc -Xcompiler
+# separate compilation -- the above CUDA version supports c++ up to 14
+NVCC_FLAGS := -std=c++14 -dc -Xcompiler
 ifeq ($(DEBUG),1)
-  NVCC_FLAGS += -g3
+  NVCC_FLAGS += -g3 -O0
+else
+  NVCC_FLAGS += -O3
 endif
 CUDA_LINK_FLAGS := -dlink
 
 CUDA_INCL := -I$(CUDA_PATH)/include
-CUDA_LIBS := -L$(CUDA_PATH)/lib64 -lcudart -lcublas -lcusparse
+CUDA_LIBS := -L$(CUDA_PATH)/lib64 -lcudart 
 
 CUDA_SRCS := $(wildcard *.cu) $(wildcard $(SRC_DIR)/*.cu)
 CUDA_OBJS := $(patsubst %.cu, %.o, $(notdir $(CUDA_SRCS)))
 
 # =========== C++ part ===========
 CC := g++
-CFLAGS := -O3 -std=c++17 -Wall 
+CFLAGS := -O3 -std=c++17 -Wall
 ifeq ($(DEBUG),1)
-  CFLAGS += -g3
+  CFLAGS += -g3 -O0
 endif
 
 INCL := -I$(SRC_DIR)
-LIBS :=# -L~/gsl/lib -lgsl -lgslcblas -lm
+LIBS :=# ARE THERE LICENSE ISSUES OF USING THESE LIBRARIES?
 
 SRCS := $(wildcard *.cpp) $(wildcard $(SRC_DIR)/*.cpp)
 OBJS := $(patsubst %.cpp, %.o, $(notdir $(SRCS)))
