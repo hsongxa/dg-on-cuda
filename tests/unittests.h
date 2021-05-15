@@ -31,4 +31,6 @@
 
   int test_dense_matrix();
 
+  int test_jacobi_polynomial();
+
 #endif

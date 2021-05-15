@@ -480,8 +480,9 @@ dense_matrix<T, CM, Alloc> dense_matrix<T, CM, Alloc>::inverse() const
   if (size == 0) return inv;
 
   // find adjoint
+  value_type one = static_cast<value_type>(1.0L); // TODO: properly retrieve one from type
   if (size == 1)
-    inv(0, 0) = static_cast<value_type>(1.0); // one
+    inv(0, 0) = one;
   else
   {
     dense_matrix tmp(size - 1, size - 1);
@@ -494,7 +495,7 @@ dense_matrix<T, CM, Alloc> dense_matrix<T, CM, Alloc>::inverse() const
       }
   }
 
-  return (static_cast<value_type>(1.0) / determinant(*this)) * inv;
+  return (one / determinant(*this)) * inv;
 }
 
 template<typename T, bool CM, typename Alloc> template<typename InputItr, typename InOutItr>

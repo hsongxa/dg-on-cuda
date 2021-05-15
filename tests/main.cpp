@@ -32,7 +32,9 @@ int main(int argc, char **argv) {
   //test_hello_world_kernel();
   //test_hello_world_template_kernel();
 
-  if (test_dense_matrix())
+  //if (test_dense_matrix())
+  //  std::cout << "test_dense_matrix FAILED!!!" << std::endl;
+  if (test_jacobi_polynomial())
     std::cout << "test_dense_matrix FAILED!!!" << std::endl;
 
   // finish
