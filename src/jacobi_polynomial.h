@@ -80,8 +80,8 @@ T jacobi_polynomial_value(T alpha, T beta, std::size_t n, T x)
   return val;
 }
 
-template<typename T, typename Itr>
-void jacobi_polynomial_values(T alpha, T beta, std::size_t n, T x, Itr it)
+template<typename T, typename OutputIterator>
+void jacobi_polynomial_values(T alpha, T beta, std::size_t n, T x, OutputIterator it)
 {
   T a1 = alpha + one<T>;
   T b1 = beta + one<T>;
@@ -119,8 +119,8 @@ T jacobi_polynomial_derivative(T alpha, T beta, std::size_t n, T x)
   return sqrt(n * (n + alpha + beta + one<T>)) * val;
 }
 
-template<typename T, typename Itr>
-void jacobi_polynomial_derivatives(T alpha, T beta, std::size_t n, T x, Itr it)
+template<typename T, typename OutputIterator>
+void jacobi_polynomial_derivatives(T alpha, T beta, std::size_t n, T x, OutputIterator it)
 {
   it = T{}; // zero
   if (n == 0) return;

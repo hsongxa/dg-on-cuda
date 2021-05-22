@@ -22,28 +22,31 @@
  * SOFTWARE.
  **/
 
+#include <vector>
+#include <iterator>
 #include <iostream>
-#include "unittests.h"
 
-////////////////////////////////////////////////////////////////////////////////
-// Program main
-////////////////////////////////////////////////////////////////////////////////
-int main(int argc, char **argv) {
-  //test_hello_world_kernel();
-  //test_hello_world_template_kernel();
+#include "quadrature_rules.h"
 
-  //if (test_dense_matrix())
-  //  std::cout << "test_dense_matrix FAILED!!!" << std::endl;
-  //if (test_jacobi_polynomial())
-  //  std::cout << "test_dense_matrix FAILED!!!" << std::endl;
-  //if (test_quadrature_rules())
-  //  std::cout << "test_quadrature_rules FAILED!!!" << std::endl;
-  //if (test_reference_segment())
-  //  std::cout << "test_reference_segment FAILED!!!" << std::endl;
-  if (test_reference_triangle())
-    std::cout << "test_reference_triangle FAILED!!!" << std::endl;
+int test_quadrature_rules()
+{
+  using namespace dgc;
 
+  std::vector<double> points;
+  std::vector<double> weights;
 
-  // finish
+  // Gauss-Lobatto quadrature
+  for(int np = 2; np < 8; ++np)
+  {
+    points.clear();
+    weights.clear();
+    gauss_lobatto_quadrature(np, std::back_inserter(points), std::back_inserter(weights));
+
+    std::cout << "Gauss-Lobatto quadrature of " << np << " points:" << std::endl;
+    for (std::size_t j = 0; j < points.size(); ++j)
+      std::cout << "p = " << points[j] << ", w = " << weights[j] << std::endl;    
+  }
+  std::cout << std::endl;
+
   return 0;
 }
