@@ -33,4 +33,10 @@
 
   int test_jacobi_polynomial();
 
+  int test_quadrature_rules();
+
+  int test_reference_segment();
+
+  int test_reference_triangle();
+
 #endif

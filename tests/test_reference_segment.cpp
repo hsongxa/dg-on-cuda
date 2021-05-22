@@ -22,28 +22,38 @@
  * SOFTWARE.
  **/
 
+#include <vector>
+#include <iterator>
 #include <iostream>
-#include "unittests.h"
 
-////////////////////////////////////////////////////////////////////////////////
-// Program main
-////////////////////////////////////////////////////////////////////////////////
-int main(int argc, char **argv) {
-  //test_hello_world_kernel();
-  //test_hello_world_template_kernel();
+#include "reference_segment.h"
 
-  //if (test_dense_matrix())
-  //  std::cout << "test_dense_matrix FAILED!!!" << std::endl;
-  //if (test_jacobi_polynomial())
-  //  std::cout << "test_dense_matrix FAILED!!!" << std::endl;
-  //if (test_quadrature_rules())
-  //  std::cout << "test_quadrature_rules FAILED!!!" << std::endl;
-  //if (test_reference_segment())
-  //  std::cout << "test_reference_segment FAILED!!!" << std::endl;
-  if (test_reference_triangle())
-    std::cout << "test_reference_triangle FAILED!!!" << std::endl;
+int test_reference_segment()
+{
+  using namespace dgc;
 
+  std::vector<double> nodes;
 
-  // finish
+  reference_segment<double> refSeg;
+  for(std::size_t order = 1; order < 7; ++order)
+  {
+    nodes.clear();
+
+    std::cout << "reference segment order = " << order << std::endl;
+    std::cout << "number of nodes: " << refSeg.num_nodes(order) << std::endl;
+    refSeg.node_positions(order, std::back_inserter(nodes));
+    for (std::size_t j = 0; j < nodes.size(); ++j)
+      std::cout << "p = " << nodes[j] << std::endl;    
+
+    auto v = refSeg.vandermonde_matrix(order);
+    std::cout << "vandermonde matrix: " << std::endl << v;
+    auto vr = refSeg.grad_vandermonde_matrix(order);
+    std::cout << "gradient of vandermonde matrix: " << std::endl << vr;
+    std::cout << "the Dr matrix: " << std::endl << vr * v.inverse() << std::endl;
+  }
+  std::cout << std::endl;
+
+  // TODO: could create custom basis and node policies and test them...
+
   return 0;
 }
