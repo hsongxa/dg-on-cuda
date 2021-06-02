@@ -22,14 +22,28 @@
  * SOFTWARE.
  **/
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#include "linear_wave_1d.h"
 
-// uncomment this line to run the code on CPU only
-#define USE_CPU_ONLY
+linear_wave_1d::linear_wave_1d(int numCells, int order, bool useWeekForm)
+  : m_numCells(numCells), m_order(order), m_useWeekForm(useWeekForm)
+{
+  reference_element refElem;
+  dense_matrix v = refElem.vandermonde_matrix(m_order);
+  dense_matrix mInv = v * v.transpose();
 
-#define BEGIN_NAMESPACE namespace dgc {
-#define END_NAMESPACE }
+  real h = s_domainSize / m_numCells;
 
-#endif
+  m_L = mInv;
+  m_L = m_L * ((real)(2.0L) / h);
 
+  dense_matrix dr = refElem.grad_vandermonde_matrix(m_order) * v.inverse();
+  dense_matrix s = mInv.inverse() * dr;
+  if (m_useWeekForm)
+    m_M = m_L * s.transpose();
+  else
+    m_M = m_L * s;
+}
+
+void linear_wave_1d::operator()(dgc::gpu_policy, const real* in_cbegin, std::size_t size, real t, real* out_begin) const
+{
+}
