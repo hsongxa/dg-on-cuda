@@ -28,33 +28,9 @@
 #include <cstddef>
 #include <cassert>
 
-#include "execution_policy.h"
+#include "kernels.h"
 
 BEGIN_NAMESPACE
-
-// Vector type could be composite type, i.e., containing multiple vectors and it must support
-// add(double, const Vector& in, Vector& out), add(const Vector& in), and scale(double s);
-// and DiscreteOp type must overload operator() (const Vector& in, double, Vector& out)
-/*template <typename Vector, typename DiscreteOp>
-void rk4(Vector& inout, double t, double dt, DiscreteOp op, Vector& wk0, Vector& wk1, Vector& wk2, Vector& wk3, Vector& wk4)
-{
-	op(inout, t, wk1);
-
-	inout.add(0.5 * dt, wk1, wk0);
-	op(wk0, t + 0.5 * dt, wk2);
-
-	inout.add(0.5 * dt, wk2, wk0);
-	op(wk0, t + 0.5 * dt, wk3);
-
-	inout.add(dt, wk3, wk0);
-	op(wk0, t + dt, wk4);
-
-	wk1.add(2.0, wk2, wk0);
-	wk4.add(2.0, wk3, wk1);
-	wk0.add(wk1);
-	wk0.scale(dt / 6.0);
-	inout.add(wk0);
-}*/
 
 // Vector type could be composite type, i.e., containing multiple vectors and it must support
 // add(double, const Vector& in, Vector& out), add(const Vector& in), and scale(double s);
@@ -124,64 +100,35 @@ void axpy_n(T a, ConstItr x_cbegin, std::size_t x_size, ConstItr y_cbegin, Itr o
 
 // fourth-order explicit Runge-Kutta method for scalar variable
 template <typename Itr, typename T, typename DiscreteOp>
-void rk4(cpu_policy policy, Itr inout, std::size_t size, T t, T dt, const DiscreteOp& op, Itr wk0, Itr wk1, Itr wk2, Itr wk3, Itr wk4)
+void rk4(Itr inout, std::size_t size, T t, T dt, const DiscreteOp& op, Itr wk0, Itr wk1, Itr wk2, Itr wk3, Itr wk4)
 {
-  Itr inout_begin = inout;
-  Itr wk1_begin = wk1;
-  op(policy, inout_begin, size, t, wk1_begin);
+  op(inout, size, t, wk1);
 
-  Itr wk0_begin = wk0;
-  inout_begin = inout;
-  wk1_begin = wk1;
-  axpy_n((T)(0.5L) * dt, wk1_begin, size, inout_begin, wk0_begin);
+  axpy_n((T)(0.5L) * dt, wk1, size, inout, wk0);
+  op(wk0, size, t + (T)(0.5L) * dt, wk2);
 
-  wk0_begin = wk0;
-  Itr wk2_begin = wk2;
-  op(policy, wk0_begin, size, t + (T)(0.5L) * dt, wk2_begin);
+  axpy_n((T)(0.5L) * dt, wk2, size, inout, wk0);
+  op(wk0, size, t + (T)(0.5L) * dt, wk3);
 
-  wk0_begin = wk0;
-  inout_begin = inout;
-  wk2_begin = wk2;
-  axpy_n((T)(0.5L) * dt, wk2_begin, size, inout_begin, wk0_begin);
+  axpy_n(dt, wk3, size, inout, wk0);
+  op(wk0, size, t + dt, wk4);
 
-  wk0_begin = wk0;
-  Itr wk3_begin = wk3;
-  op(policy, wk0_begin, size, t + (T)(0.5L) * dt, wk3_begin);
-
-  wk0_begin = wk0;
-  inout_begin = inout;
-  wk3_begin = wk3;
-  axpy_n(dt, wk3_begin, size, inout_begin, wk0_begin);
-
-  wk0_begin = wk0;
-  Itr wk4_begin = wk4;
-  op(policy, wk0_begin, size, t + dt, wk4_begin);
-
-  wk0_begin = wk0;
-  wk1_begin = wk1;
-  wk2_begin = wk2;
-  axpy_n((T)(2.0L), wk2_begin, size, wk1_begin, wk0_begin);
-
-  wk1_begin = wk1;
-  wk4_begin = wk4;
-  wk3_begin = wk3;
-  axpy_n((T)(2.0L), wk3_begin, size, wk4_begin, wk1_begin);
-
-  wk2_begin = wk2;
-  inout_begin = inout;
-  wk0_begin = wk0;
-  axpy_n(dt / (T)(6.0L), wk0_begin, size, inout_begin, wk2_begin);
-
-  inout_begin = inout;
-  wk2_begin = wk2;
-  wk1_begin = wk1;
-  axpy_n(dt / (T)(6.0L), wk1_begin, size, wk2_begin, inout_begin);
+  axpy_n((T)(2.0L), wk2, size, wk1, wk0);
+  axpy_n((T)(2.0L), wk3, size, wk4, wk1);
+  axpy_n(dt / (T)(6.0L), wk0, size, inout, wk2);
+  axpy_n(dt / (T)(6.0L), wk1, size, wk2, inout);
 }
 
+// execution on device
 template <typename T, typename DiscreteOp>
-void rk4(gpu_policy policy, T* inout, std::size_t size, T t, T dt, const DiscreteOp& op, T* wk0, T* wk1, T* wk2, T* wk3, T* wk4)
+void d_rk4(T* inout, std::size_t size, T t, T dt, const DiscreteOp& d_op, T* wk0, T* wk1, T* wk2, T* wk3, T* wk4)
 {
-  op(policy, inout, size, t, wk1);
+  d_op(inout, size, t, wk1);
+
+  //TODO: synchronization?
+
+  // copy inout to wk0 before this line!
+  d_axpy((T)(0.5L) * dt, wk1, size, wk0);
 
 }
 

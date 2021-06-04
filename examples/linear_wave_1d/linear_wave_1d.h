@@ -32,7 +32,6 @@
 
 #include "dense_matrix.h"
 #include "reference_segment.h"
-#include "execution_policy.h"
 
 class linear_wave_1d
 {
@@ -52,9 +51,7 @@ public:
 
   // put it all together: it is a discrete operator
   template<typename ConstItr, typename Itr>
-  void operator()(dgc::cpu_policy, ConstItr in_cbegin, std::size_t size, real t, Itr out_begin) const;
-
-  void operator()(dgc::gpu_policy, const real* in_cbegin, std::size_t size, real t, real* out_begin) const;
+  void operator()(ConstItr in_cbegin, std::size_t size, real t, Itr out_begin) const;
 
 private:
   template<typename ConstItr>
@@ -120,7 +117,7 @@ void linear_wave_1d::numerical_fluxes(ConstItr cbegin, real t) const
 }
 
 template<typename ConstItr, typename Itr>
-void linear_wave_1d::operator()(dgc::cpu_policy, ConstItr in_cbegin, std::size_t size, real t, Itr out_begin) const
+void linear_wave_1d::operator()(ConstItr in_cbegin, std::size_t size, real t, Itr out_begin) const
 {
   numerical_fluxes(in_cbegin, t);
 

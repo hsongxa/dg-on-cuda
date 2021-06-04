@@ -43,7 +43,3 @@ linear_wave_1d::linear_wave_1d(int numCells, int order, bool useWeekForm)
   else
     m_M = m_L * s;
 }
-
-void linear_wave_1d::operator()(dgc::gpu_policy, const real* in_cbegin, std::size_t size, real t, real* out_begin) const
-{
-}

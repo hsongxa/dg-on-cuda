@@ -29,8 +29,6 @@
 // Program main
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
-  //test_hello_world_kernel();
-  //test_hello_world_template_kernel();
 
   //if (test_dense_matrix())
   //  std::cout << "test_dense_matrix FAILED!!!" << std::endl;
@@ -42,7 +40,6 @@ int main(int argc, char **argv) {
   //  std::cout << "test_reference_segment FAILED!!!" << std::endl;
   if (test_reference_triangle())
     std::cout << "test_reference_triangle FAILED!!!" << std::endl;
-
 
   // finish
   return 0;

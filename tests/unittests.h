@@ -25,10 +25,6 @@
 #ifndef UNITTESTS_H
 #define UNITTESTS_H
 
-  int test_hello_world_kernel();
-
-  int test_hello_world_template_kernel();
-
   int test_dense_matrix();
 
   int test_jacobi_polynomial();

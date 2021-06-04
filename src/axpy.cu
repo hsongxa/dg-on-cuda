@@ -22,14 +22,30 @@
  * SOFTWARE.
  **/
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#include <cstddef>
+#include <cuda_runtime.h>
 
-// uncomment this line to run the code on CPU only
-//#define USE_CPU_ONLY
+#include "config.h"
 
-#define BEGIN_NAMESPACE namespace dgc {
-#define END_NAMESPACE }
+BEGIN_NAMESPACE
 
-#endif
+template<typename T>
+__global__ void axpy(T a, const T* x, std::size_t n, T* y)
+{
+  uint tid = blockIdx.x * blockDim.x + threadIdx.x;
+  for (uint i = tid; i < n; i += blockDim.x * gridDim.x)
+    y[i] = a * x[i] + y[i];
+}
+
+void d_axpy(double a, const double* x, std::size_t n, double* y)
+{
+  int blockSize;
+  int minGridSize;
+  cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, axpy<double>, 0, 0);
+
+  int gridSize = (n + blockSize - 1) / blockSize;
+  axpy<<<gridSize, blockSize>>>(a, x, n, y);
+}
+
+END_NAMESPACE
 

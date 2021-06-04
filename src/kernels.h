@@ -22,14 +22,17 @@
  * SOFTWARE.
  **/
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef KERNELS_H
+#define KERNELS_H 
 
-// uncomment this line to run the code on CPU only
-//#define USE_CPU_ONLY
+#include <cstddef>
 
-#define BEGIN_NAMESPACE namespace dgc {
-#define END_NAMESPACE }
+#include "config.h"
+
+BEGIN_NAMESPACE
+
+void d_axpy(double a, const double* x, std::size_t n, double* y);
+
+END_NAMESPACE
 
 #endif
-
