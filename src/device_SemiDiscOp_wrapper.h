@@ -22,30 +22,27 @@
  * SOFTWARE.
  **/
 
-#include <cstddef>
-#include <cuda_runtime.h>
+#ifndef DEVICE_SEMIDISCOP_WRAPPER_H
+#define DEVICE_SEMIDISCOP_WRAPPER_H
 
 #include "config.h"
 
+#include "k_opx.cuh"
+
 BEGIN_NAMESPACE
 
-template<typename T>
-__global__ void axpy(T a, const T* x, std::size_t n, T* y)
+template<typename DeviceSemiDiscOp>
+struct device_SemiDiscOp_wrapper
 {
-  uint tid = blockIdx.x * blockDim.x + threadIdx.x;
-  for (uint i = tid; i < n; i += blockDim.x * gridDim.x)
-    y[i] = a * x[i] + y[i];
-}
+  DeviceSemiDiscOp* m_Dop;
+  int m_GridSize;
+  int m_BlockSize;
 
-void d_axpy(double a, const double* x, std::size_t n, double* y)
-{
-  int blockSize;
-  int minGridSize;
-  cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, axpy<double>, 0, 0);
-
-  int gridSize = (n + blockSize - 1) / blockSize;
-  axpy<<<gridSize, blockSize>>>(a, x, n, y);
-}
+  template<typename T>
+  void operator()(const T* in_cbegin, std::size_t size, T t, T* out_begin) const
+  { dgc::k_opx(m_GridSize, m_BlockSize, in_cbegin, size, t, out_begin, m_Dop); }
+};
 
 END_NAMESPACE
 
+#endif

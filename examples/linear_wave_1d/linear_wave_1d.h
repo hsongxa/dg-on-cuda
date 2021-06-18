@@ -33,78 +33,96 @@
 #include "dense_matrix.h"
 #include "reference_segment.h"
 
+// host code that represent the problem of linear wave equation in one dimensional space
+template<typename T>
 class linear_wave_1d
 {
 public:
-  using real = double; // one place to change number type here
-
-  linear_wave_1d(int numCells, int order, bool useWeekForm = true); 
+  linear_wave_1d(int numCells, int order); 
   ~linear_wave_1d(){}
   
-  real wave_speed() const { return s_waveSpeed; }
+  T wave_speed() const { return s_waveSpeed; }
 
   // reference element and mapping
-  real min_elem_size() const { return s_domainSize / m_numCells; }
+  T min_elem_size() const { return s_domainSize / m_numCells; }
 
   template<typename OutputIterator>
   void dof_positions(OutputIterator it) const;
 
   // put it all together: it is a discrete operator
   template<typename ConstItr, typename Itr>
-  void operator()(ConstItr in_cbegin, std::size_t size, real t, Itr out_begin) const;
+  void operator()(ConstItr in_cbegin, std::size_t size, T t, Itr out_begin) const;
 
-private:
-  template<typename ConstItr>
-  void numerical_fluxes(ConstItr cbegin, real t) const; // time t is used for boundary conditions
-
-  // numerical flux
-  real numerical_flux(real a, real b) const 
-  { return s_waveSpeed * (real)(0.5L) * (a + b) + s_waveSpeed * (real)(0.5L) * ((real)(1.0L) - s_alpha) * (a - b); }
-
-private:
-  using reference_element = dgc::reference_segment<real>;
-  using dense_matrix = dgc::dense_matrix<real, false>; // row major
-
+  // need to easily copy these matrices to device so make them public
+  using dense_matrix = dgc::dense_matrix<T, false>; // row major
   dense_matrix m_M;
   dense_matrix m_L;
 
+private:
+  template<typename ConstItr>
+  void numerical_fluxes(ConstItr cbegin, T t) const; // time t is used for boundary conditions
+
+  // numerical flux
+  T numerical_flux(T a, T b) const 
+  { return s_waveSpeed * (T)(0.5L) * (a + b) + s_waveSpeed * (T)(0.5L) * ((T)(1.0L) - s_alpha) * (a - b); }
+
+private:
+  using reference_element = dgc::reference_segment<T>;
+
   // numerical flux constant
-  real s_alpha = (real)(0.0L); // 1.0 for central flux and 0.0 for unwind flux
+  T s_alpha = (T)(0.0L); // 1.0 for central flux and 0.0 for unwind flux
 
   // numerical scheme data (could be constants if never change)
   int m_numCells;
   int m_order;
-  bool m_useWeekForm;
 
   // problem definitions
-  const real s_domainSize = (real)(2.L) * (real)(M_PI);
-  const real s_waveSpeed = (real)(2.L) * (real)(M_PI);
+  const T s_domainSize = (T)(2.L) * (T)(M_PI);
+  const T s_waveSpeed = (T)(2.L) * (T)(M_PI);
 
   // work space for numerical fluxes to avoid repeated allocations
-  mutable std::vector<real> m_numericalFluxes;
+  mutable std::vector<T> m_numericalFluxes;
 };
 
-template<typename OutputIterator>
-void linear_wave_1d::dof_positions(OutputIterator it) const
+template<typename T>
+linear_wave_1d<T>::linear_wave_1d(int numCells, int order)
+  : m_numCells(numCells), m_order(order)
 {
   reference_element refElem;
-  std::vector<real> pos;
+  dense_matrix v = refElem.vandermonde_matrix(m_order);
+  dense_matrix mInv = v * v.transpose();
+
+  T h = s_domainSize / m_numCells;
+
+  m_L = mInv;
+  m_L = m_L * ((T)(2.0L) / h);
+
+  dense_matrix dr = refElem.grad_vandermonde_matrix(m_order) * v.inverse();
+  dense_matrix s = mInv.inverse() * dr;
+  m_M = m_L * s;
+}
+
+template<typename T> template<typename OutputIterator>
+void linear_wave_1d<T>::dof_positions(OutputIterator it) const
+{
+  reference_element refElem;
+  std::vector<T> pos;
   refElem.node_positions(m_order, std::back_inserter(pos));
 
   // could be extracted to a class of mapping
-  real h = s_domainSize / m_numCells;
+  T h = s_domainSize / m_numCells;
   for (int i = 0; i < m_numCells; ++i)
     for (int j = 0; j < pos.size(); ++j)
-      it = i * h + ((real)(1.L) + pos[j]) * (real)(0.5L) * h;
+      it = i * h + ((T)(1.L) + pos[j]) * (T)(0.5L) * h;
 }
 
-template<typename ConstItr>
-void linear_wave_1d::numerical_fluxes(ConstItr cbegin, real t) const
+template<typename T> template<typename ConstItr>
+void linear_wave_1d<T>::numerical_fluxes(ConstItr cbegin, T t) const
 {
   int numFluxes = m_numCells + 1;
   if (m_numericalFluxes.size() < numFluxes) m_numericalFluxes.resize(numFluxes);
 
-  real a, b;
+  T a, b;
   int np = m_order + 1; // d.o.f. management !
   for (int i = 0; i < numFluxes; ++i)
   {
@@ -116,46 +134,27 @@ void linear_wave_1d::numerical_fluxes(ConstItr cbegin, real t) const
   }
 }
 
-template<typename ConstItr, typename Itr>
-void linear_wave_1d::operator()(ConstItr in_cbegin, std::size_t size, real t, Itr out_begin) const
+template<typename T> template<typename ConstItr, typename Itr>
+void linear_wave_1d<T>::operator()(ConstItr in_cbegin, std::size_t size, T t, Itr out_begin) const
 {
   numerical_fluxes(in_cbegin, t);
 
   int np = m_order + 1; // scalar unknown variable
-  std::vector<real> in_vec(np); // recalculated below for each cell
-  std::vector<real> out_vec(np); // recalculated below for each cell
+  std::vector<T> in_vec(np); // recalculated below for each cell
+  std::vector<T> out_vec(np); // recalculated below for each cell
 
-  if (m_useWeekForm)
+  for (int cell = 0; cell < m_numCells; ++cell)
   {
-    for (int cell = 0; cell < m_numCells; ++cell)
-    {
-      m_M.gemv(s_waveSpeed, in_cbegin + (cell * np), (real)(0.0L), out_begin + (cell * np));
+    m_M.gemv(-s_waveSpeed, in_cbegin + (cell * np), (T)(0.0L), out_begin + (cell * np));
 
-      std::fill(in_vec.begin(), in_vec.end(), (real)(0.0L));
-      std::fill(out_vec.begin(), out_vec.end(), (real)(0.0L));
-      in_vec[0] = m_numericalFluxes[cell];
-      in_vec[np - 1] = - m_numericalFluxes[cell + 1];
-      m_L.gemv((real)(1.0L), &in_vec[0], (real)(1.0L), &out_vec[0]);
+    std::fill(in_vec.begin(), in_vec.end(), (T)(0.0L));
+    std::fill(out_vec.begin(), out_vec.end(), (T)(0.0L));
+    in_vec[0] = m_numericalFluxes[cell] - s_waveSpeed * *(in_cbegin + (cell * np));
+    in_vec[np - 1] = s_waveSpeed * *(in_cbegin + ((cell + 1) * np - 1)) - m_numericalFluxes[cell + 1];
+    m_L.gemv((T)(1.0L), &in_vec[0], (T)(1.0L), &out_vec[0]);
 
-      for (int j = 0; j < np; ++j)
-        *(out_begin + (cell * np + j)) += out_vec[j];
-    }
-  }
-  else
-  {
-    for (int cell = 0; cell < m_numCells; ++cell)
-    {
-      m_M.gemv(-s_waveSpeed, in_cbegin + (cell * np), (real)(0.0L), out_begin + (cell * np));
-
-      std::fill(in_vec.begin(), in_vec.end(), (real)(0.0L));
-      std::fill(out_vec.begin(), out_vec.end(), (real)(0.0L));
-      in_vec[0] = m_numericalFluxes[cell] - s_waveSpeed * *(in_cbegin + (cell * np));
-      in_vec[np - 1] = s_waveSpeed * *(in_cbegin + ((cell + 1) * np - 1)) - m_numericalFluxes[cell + 1];
-      m_L.gemv((real)(1.0L), &in_vec[0], (real)(1.0L), &out_vec[0]);
-
-      for (int j = 0; j < np; ++j)
-        *(out_begin + (cell * np + j)) += out_vec[j];
-    }
+    for (int j = 0; j < np; ++j)
+      *(out_begin + (cell * np + j)) += out_vec[j];
   }
 }
 

@@ -22,24 +22,13 @@
  * SOFTWARE.
  **/
 
-#include "linear_wave_1d.h"
+#ifndef K_LINEAR_WAVE_1D_CUH
+#define K_LINEAR_WAVE_1D_CUH
 
-linear_wave_1d::linear_wave_1d(int numCells, int order, bool useWeekForm)
-  : m_numCells(numCells), m_order(order), m_useWeekForm(useWeekForm)
-{
-  reference_element refElem;
-  dense_matrix v = refElem.vandermonde_matrix(m_order);
-  dense_matrix mInv = v * v.transpose();
+#include "d_linear_wave_1d.cuh"
 
-  real h = s_domainSize / m_numCells;
+// NOTE: See the note of the companion .cu file.
+void k_linear_wave_1d(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
+                      d_linear_wave_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);
 
-  m_L = mInv;
-  m_L = m_L * ((real)(2.0L) / h);
-
-  dense_matrix dr = refElem.grad_vandermonde_matrix(m_order) * v.inverse();
-  dense_matrix s = mInv.inverse() * dr;
-  if (m_useWeekForm)
-    m_M = m_L * s.transpose();
-  else
-    m_M = m_L * s;
-}
+#endif
