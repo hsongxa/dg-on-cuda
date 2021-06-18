@@ -1,4 +1,5 @@
-DEBUG ?= 1
+# uncomment to have debug build
+#DEBUG ?= 1
 
 SRC_DIR := ../../src
 VPATH := $(SRC_DIR)

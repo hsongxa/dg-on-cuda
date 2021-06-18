@@ -27,17 +27,20 @@
 #include <iostream>
 #include <fstream>
 #include <limits>
+#include <chrono>
 
 #include <cuda_runtime.h>
 
 #include "linear_wave_1d.h"
 #include "explicit_runge_kutta.h"
+#if !defined USE_CPU_ONLY
+#include "d_linear_wave_1d.cuh"
+#include "k_linear_wave_1d.cuh"
+#endif
 
-using real = typename linear_wave_1d::real;
-
-real compute_error_norm(std::vector<real>& x, real* v, real t)
+double compute_error_norm(std::vector<double>& x, double* v, double t)
 {
-  real err = 0.0;
+  double err = 0.0;
   for(int i = 0; i < x.size(); ++i)
     err += (std::sin(x[i] - 2. * M_PI * t) - v[i]) * (std::sin(x[i] - 2. * M_PI * t) - v[i]);
   return err / x.size();
@@ -48,65 +51,97 @@ real compute_error_norm(std::vector<real>& x, real* v, real t)
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
 
-  const int numCells = 100;
-  const int order = 1;
-  linear_wave_1d op(numCells, order); // op(numCells, order, false);
+  const int numCells = 1024 * 8;
+  const int order = 3;
+  linear_wave_1d<double> op(numCells, order);
+#if !defined USE_CPU_ONLY
+  // create the device object (on device)
+  d_linear_wave_1d<double>* dOp;
+  cudaMalloc(&dOp, sizeof(d_linear_wave_1d<double>));
+  double* dMM;
+  double* dML;
+  cudaMalloc(&dMM, (order + 1) * (order + 1) * sizeof(double));
+  cudaMalloc(&dML, (order + 1) * (order + 1) * sizeof(double));
+  cudaMemcpy(dMM, op.m_M.data(), (order + 1) * (order + 1) * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(dML, op.m_L.data(), (order + 1) * (order + 1) * sizeof(double), cudaMemcpyHostToDevice);
 
-  std::vector<real> x;
+  d_linear_wave_1d<double> tmp;
+  tmp.m_M = dMM;
+  tmp.m_L = dML;
+  tmp.m_NumRows = order + 1;
+  tmp.m_NumCols = order + 1;
+  tmp.m_NumCells = numCells;
+  cudaMemcpy(dOp, &tmp, sizeof(d_linear_wave_1d<double>), cudaMemcpyHostToDevice);
+#endif
+
+  std::vector<double> x;
   op.dof_positions(std::back_inserter(x));
 
   // initial condition
   int numDOFs = numCells * (order +  1);
-  real* v;
-  cudaMallocManaged(&v, numDOFs * sizeof(real)); // unified memory
+  double* v;
+  cudaMallocManaged(&v, numDOFs * sizeof(double)); // unified memory
   for (int i = 0; i < numDOFs; ++i) v[i] = std::sin(x[i]);
 
   // allocate work space for Runge-Kutta loop
-  real* v1;
-  real* v2;
-  real* v3;
-  real* v4;
-  real* v5;
-  cudaMallocManaged(&v1, numDOFs * sizeof(real));
-  cudaMallocManaged(&v2, numDOFs * sizeof(real));
-  cudaMallocManaged(&v3, numDOFs * sizeof(real));
-  cudaMallocManaged(&v4, numDOFs * sizeof(real));
-  cudaMallocManaged(&v5, numDOFs * sizeof(real));
+  double* v1;
+  double* v2;
+  double* v3;
+  double* v4;
+  double* v5;
+  cudaMallocManaged(&v1, numDOFs * sizeof(double));
+  cudaMallocManaged(&v2, numDOFs * sizeof(double));
+  cudaMallocManaged(&v3, numDOFs * sizeof(double));
+  cudaMallocManaged(&v4, numDOFs * sizeof(double));
+  cudaMallocManaged(&v5, numDOFs * sizeof(double));
   
   // time advancing loop
-  int totalTSs = 3000;
-  real t = 0.0;
-real dt = 0.15 * 0.75 * op.min_elem_size() / op.wave_speed();
-for (int i = 0; i < totalTSs; ++i)
-{
+  int totalTSs = 10000;
+  double t = 0.0;
+  double dt = 0.15 * 0.75 * op.min_elem_size() / op.wave_speed();
+  int blockSize = 1024;
+  int blockDim = (numCells + blockSize - 1) / blockSize;
+  auto t0 = std::chrono::system_clock::now();
+  for (int i = 0; i < totalTSs; ++i)
+  {
 #if defined USE_CPU_ONLY
-  dgc::rk4(v, numDOFs, t, dt, op, v1, v2, v3, v4, v5);
+    dgc::rk4(v, numDOFs, t, dt, op, &dgc::axpy_n<const double*, double, double*>, v1, v2, v3, v4, v5);
 #else
-  dgc::d_rk4(v, numDOFs, t, dt, op, v1, v2, v3, v4, v5);
-  cudaDeviceSynchronize();
+    k_linear_wave_1d(blockDim, blockSize, v, numDOFs, t, dt, dOp, v1, v2, v3, v4, v5);
+    cudaDeviceSynchronize();
 #endif
-  t += dt;
-  real errNorm = compute_error_norm(x, v, t);
-  std::cout << "t = " << t << ", error norm = " << errNorm << std::endl;
-}
+    t += dt;
+  }
+  auto t1 = std::chrono::system_clock::now();
 
-// output to visualize
-std::ofstream file;
-file.open("LinearWave1DDataFile.txt");
-file.precision(std::numeric_limits<real>::digits10);
-file << "#         x         y" << std::endl;
-for(int i = 0; i < numDOFs; ++i)
-  file << x[i] << "  " << v[i] << std::endl;
-file << std::endl;
-file << "#         x         reference solution" << std::endl;
-for(int i = 0; i < numDOFs; ++i)
-  file << x[i] << " " << std::sin(x[i] - op.wave_speed() * t) << std::endl;
+  // output the last error
+  double errNorm = compute_error_norm(x, v, t - dt);
+  std::cout << "t = " << t - dt << ", error norm = " << errNorm << std::endl;
+  std::cout << "time used: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms" << std::endl;
 
-cudaFree(v);
-cudaFree(v1);
-cudaFree(v2);
-cudaFree(v3);
-cudaFree(v4);
-cudaFree(v5);
-return 0;
+  // output to visualize
+  std::ofstream file;
+  file.open("LinearWave1DDataFile.txt");
+  file.precision(std::numeric_limits<double>::digits10);
+  file << "#         x         y" << std::endl;
+  for(int i = 0; i < numDOFs; ++i)
+    file << x[i] << "  " << v[i] << std::endl;
+  file << std::endl;
+  file << "#         x         reference solution" << std::endl;
+  for(int i = 0; i < numDOFs; ++i)
+    file << x[i] << " " << std::sin(x[i] - op.wave_speed() * t) << std::endl;
+
+  cudaFree(v);
+  cudaFree(v1);
+  cudaFree(v2);
+  cudaFree(v3);
+  cudaFree(v4);
+  cudaFree(v5);
+#if !defined USE_CPU_ONLY
+  cudaFree(dOp);
+  cudaFree(dMM);
+  cudaFree(dML);
+#endif
+
+  return 0;
 }
