@@ -28,6 +28,7 @@
 #include <utility>
 #include <tuple>
 
+#include "const_val.h"
 #include "jacobi_polynomial.h"
 #include "orthonormal_basis_segment.h"
 
@@ -45,23 +46,23 @@ struct orthonormal_basis_triangle
   {
     T a, b;
     std::tie(a, b) = rs_to_ab(r, s);
-    return sqrt(two<T>) * jacobi_polynomial_value(T{}, T{}, order_r, a) * jacobi_polynomial_value(two<T> * order_r + one<T>, T{}, order_s, b) * pow(one<T> - b, (T)order_r);
+    return sqrt(const_val<T, 2>) * jacobi_polynomial_value(const_val<T, 0>, const_val<T, 0>, order_r, a) * jacobi_polynomial_value(const_val<T, 2> * order_r + const_val<T, 1>, const_val<T, 0>, order_s, b) * pow(const_val<T, 1> - b, static_cast<T>(order_r));
   }
 
   static std::pair<T, T> derivative(std::size_t order_r, T r, std::size_t order_s, T s)
   {
     T a, b;
     std::tie(a, b) = rs_to_ab(r, s);
-    T val_a = jacobi_polynomial_value(T{}, T{}, order_r, a);
-    T val_b = jacobi_polynomial_value(two<T> * order_r + one<T>, T{}, order_s, b);
-    T deri_a = jacobi_polynomial_derivative(T{}, T{}, order_r, a);
-    T deri_b = jacobi_polynomial_derivative(two<T> * order_r + one<T>, T{}, order_s, b);
+    T val_a = jacobi_polynomial_value(const_val<T, 0>, const_val<T, 0>, order_r, a);
+    T val_b = jacobi_polynomial_value(const_val<T, 2> * order_r + const_val<T, 1>, const_val<T, 0>, order_s, b);
+    T deri_a = jacobi_polynomial_derivative(const_val<T, 0>, const_val<T, 0>, order_r, a);
+    T deri_b = jacobi_polynomial_derivative(const_val<T, 2> * order_r + const_val<T, 1>, const_val<T, 0>, order_s, b);
 
-    T dr = sqrt(two<T>) * deri_a * val_b;
-    if (order_r > 0) dr *= (two<T> * pow(one<T> - b, (T)(order_r - 1)));
+    T dr = sqrt(const_val<T, 2>) * deri_a * val_b;
+    if (order_r > 0) dr *= (const_val<T, 2> * pow(const_val<T, 1> - b, static_cast<T>(order_r - 1)));
 
-    T ds = order_r == 0 ? sqrt(two<T>) * (deri_a * val_b * half<T> * (one<T> + a) + val_a * deri_b) :
-                          sqrt(two<T>) * pow(one<T> - b, (T)(order_r - 1)) * (deri_a * val_b * (one<T> + a) + val_a * deri_b * (one<T> - b) - (T)order_r * val_a * val_b);
+    T ds = order_r == 0 ? sqrt(const_val<T, 2>) * (deri_a * val_b * (const_val<T, 1> / const_val<T, 2>) * (const_val<T, 1> + a) + val_a * deri_b) :
+                          sqrt(const_val<T, 2>) * pow(const_val<T, 1> - b, static_cast<T>(order_r - 1)) * (deri_a * val_b * (const_val<T, 1> + a) + val_a * deri_b * (const_val<T, 1> - b) - static_cast<T>(order_r) * val_a * val_b);
 
     return std::make_pair(dr, ds);
   }
@@ -69,7 +70,7 @@ struct orthonormal_basis_triangle
 private:
   static std::pair<T, T> rs_to_ab(T r, T s)
   {
-    T a = s == one<T> ? - one<T> : two<T> * (one<T> + r) / (one<T> - s) - one<T>;
+    T a = s == const_val<T, 1> ? - const_val<T, 1> : const_val<T, 2> * (const_val<T, 1> + r) / (const_val<T, 1> - s) - const_val<T, 1>;
     return std::make_pair(a, s);
   }
 };

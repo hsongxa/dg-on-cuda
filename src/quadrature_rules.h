@@ -32,6 +32,7 @@
 #include <cassert>
 
 #include "config.h"
+#include "const_val.h"
 
 BEGIN_NAMESPACE
 
@@ -65,7 +66,6 @@ struct output_iterator_traits<std::ostreambuf_iterator<charT, traits>>
 
 
 
-
 // TODO: implement the Golub-Welsch algorithm to cover arbitrary order
 template<typename OutputIteratorP, typename OutputIteratorW>
 void gauss_lobatto_quadrature(std::size_t npts, OutputIteratorP it_p, OutputIteratorW it_w)
@@ -78,70 +78,70 @@ void gauss_lobatto_quadrature(std::size_t npts, OutputIteratorP it_p, OutputIter
   switch (npts)
   {
     case 2:
-      it_p = - P(1);
-      it_w = W(1);
-      it_p = P(1);
-      it_w = W(1);
+      it_p = - const_val<P, 1>;
+      it_w = const_val<W, 1>;
+      it_p = const_val<P, 1>;
+      it_w = const_val<W, 1>;
       return;
     case 3:
-      it_p = - P(1);
-      it_w = W(1) / W(3);
-      it_p = P{}; // zero
-      it_w = W(4) / W(3);
-      it_p = P(1);
-      it_w = W(1) / W(3);
+      it_p = - const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 3>;
+      it_p = const_val<P, 0>;
+      it_w = const_val<W, 4> / const_val<W, 3>;
+      it_p = const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 3>;
       return;
     case 4:
-      it_p = - P(1);
-      it_w = W(1) / W(6);
-      it_p = - std::sqrt(P(1) / P(5));
-      it_w = W(5) / W(6);
-      it_p = std::sqrt(P(1) / P(5));
-      it_w = W(5) / W(6);
-      it_p = P(1);
-      it_w = W(1) / W(6);
+      it_p = - const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 6>;
+      it_p = - std::sqrt(const_val<P, 1> / const_val<P, 5>);
+      it_w = const_val<W, 5> / const_val<W, 6>;
+      it_p = std::sqrt(const_val<P, 1> / const_val<P, 5>);
+      it_w = const_val<W, 5> / const_val<W, 6>;
+      it_p = const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 6>;
       return;
     case 5:
-      it_p = - P(1);
-      it_w = W(1) / W(10);
-      it_p = - std::sqrt(P(3) / P(7));
-      it_w = W(49) / W(90);
-      it_p = P{}; // zero
-      it_w = W(32) / W(45);
-      it_p = std::sqrt(P(3) / P(7));
-      it_w = W(49) / W(90);
-      it_p = P(1);
-      it_w = W(1) / W(10);
+      it_p = - const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 10>;
+      it_p = - std::sqrt(const_val<P, 3> / const_val<P, 7>);
+      it_w = const_val<W, 49> / const_val<W, 90>;
+      it_p = const_val<P, 0>;
+      it_w = const_val<W, 32> / const_val<W, 45>;
+      it_p = std::sqrt(const_val<P, 3> / const_val<P, 7>);
+      it_w = const_val<W, 49> / const_val<W, 90>;
+      it_p = const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 10>;
       return;
     case 6:
-      it_p = - P(1);
-      it_w = W(1) / W(15);
-      it_p = - std::sqrt(P(1) / P(3) + P(2) * std::sqrt(P(7)) / P(21));
-      it_w = (W(14) - std::sqrt(W(7))) / W(30);
-      it_p = - std::sqrt(P(1) / P(3) - P(2) * std::sqrt(P(7)) / P(21));
-      it_w = (W(14) + std::sqrt(W(7))) / W(30);
-      it_p = std::sqrt(P(1) / P(3) - P(2) * std::sqrt(P(7)) / P(21));
-      it_w = (W(14) + std::sqrt(W(7))) / W(30);
-      it_p = std::sqrt(P(1) / P(3) + P(2) * std::sqrt(P(7)) / P(21));
-      it_w = (W(14) - std::sqrt(W(7))) / W(30);
-      it_p = P(1);
-      it_w = W(1) / W(15);
+      it_p = - const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 15>;
+      it_p = - std::sqrt(const_val<P, 1> / const_val<P, 3> + const_val<P, 2> * std::sqrt(const_val<P, 7>) / const_val<P, 21>);
+      it_w = (const_val<W, 14> - std::sqrt(const_val<W, 7>)) / const_val<W, 30>;
+      it_p = - std::sqrt(const_val<P, 1> / const_val<P, 3> - const_val<P, 2> * std::sqrt(const_val<P, 7>) / const_val<P, 21>);
+      it_w = (const_val<W, 14> + std::sqrt(const_val<W, 7>)) / const_val<W, 30>;
+      it_p = std::sqrt(const_val<P, 1> / const_val<P, 3> - const_val<P, 2> * std::sqrt(const_val<P, 7>) / const_val<P, 21>);
+      it_w = (const_val<W, 14> + std::sqrt(const_val<W, 7>)) / const_val<W, 30>;
+      it_p = std::sqrt(const_val<P, 1> / const_val<P, 3> + const_val<P, 2> * std::sqrt(const_val<P, 7>) / const_val<P, 21>);
+      it_w = (const_val<W, 14> - std::sqrt(const_val<W, 7>)) / const_val<W, 30>;
+      it_p = const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 15>;
       return;
     case 7:
-      it_p = - P(1);
-      it_w = W(1) / W(21);
-      it_p = - std::sqrt(P(5) / P(11) + P(2) * std::sqrt(P(5) / P(3)) / P(11));
-      it_w = (W(124) - W(7) * std::sqrt(W(15))) / W(350);
-      it_p = - std::sqrt(P(5) / P(11) - P(2) * std::sqrt(P(5) / P(3)) / P(11));
-      it_w = (W(124) + W(7) * std::sqrt(W(15))) / W(350);
-      it_p = P{}; // zero
-      it_w = W(256) / W(525);
-      it_p = std::sqrt(P(5) / P(11) - P(2) * std::sqrt(P(5) / P(3)) / P(11));
-      it_w = (W(124) + W(7) * std::sqrt(W(15))) / W(350);
-      it_p = std::sqrt(P(5) / P(11) + P(2) * std::sqrt(P(5) / P(3)) / P(11));
-      it_w = (W(124) - W(7) * std::sqrt(W(15))) / W(350);
-      it_p = P(1);
-      it_w = W(1) / W(21);
+      it_p = - const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 21>;
+      it_p = - std::sqrt(const_val<P, 5> / const_val<P, 11> + const_val<P, 2> * std::sqrt(const_val<P, 5> / const_val<P, 3>) / const_val<P, 11>);
+      it_w = (const_val<W, 124> - const_val<W, 7> * std::sqrt(const_val<W, 15>)) / const_val<W, 350>;
+      it_p = - std::sqrt(const_val<P, 5> / const_val<P, 11> - const_val<P, 2> * std::sqrt(const_val<P, 5> / const_val<P, 3>) / const_val<P, 11>);
+      it_w = (const_val<W, 124> + const_val<W, 7> * std::sqrt(const_val<W, 15>)) / const_val<W, 350>;
+      it_p = const_val<P, 0>;
+      it_w = const_val<W, 256> / const_val<W, 525>;
+      it_p = std::sqrt(const_val<P, 5> / const_val<P, 11> - const_val<P, 2> * std::sqrt(const_val<P, 5> / const_val<P, 3>) / const_val<P, 11>);
+      it_w = (const_val<W, 124> + const_val<W, 7> * std::sqrt(const_val<W, 15>)) / const_val<W, 350>;
+      it_p = std::sqrt(const_val<P, 5> / const_val<P, 11> + const_val<P, 2> * std::sqrt(const_val<P, 5> / const_val<P, 3>) / const_val<P, 11>);
+      it_w = (const_val<W, 124> - const_val<W, 7> * std::sqrt(const_val<W, 15>)) / const_val<W, 350>;
+      it_p = const_val<P, 1>;
+      it_w = const_val<W, 1> / const_val<W, 21>;
       return;
     default:
       throw "arbitrary order gauss-lobatto quadrature is not implemented yet!";

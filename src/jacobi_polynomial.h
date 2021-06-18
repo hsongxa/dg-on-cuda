@@ -29,6 +29,7 @@
 #include <cstddef>
 
 #include "config.h"
+#include "const_val.h"
 
 BEGIN_NAMESPACE
 
@@ -42,34 +43,25 @@ template<typename T>
 T pow(T base, T exp) { return std::pow(base, exp); }
 
 template<typename T>
-constexpr T one = T(1.0L);
-
-template<typename T>
-constexpr T two = T(2.0L);
-
-template<typename T>
-constexpr T half = T(0.5L);
-
-template<typename T>
 T jacobi_polynomial_value(T alpha, T beta, std::size_t n, T x)
 {
-  T a1 = alpha + one<T>;
-  T b1 = beta + one<T>;
-  T ab2 = alpha + beta + two<T>;
+  T a1 = alpha + const_val<T, 1>;
+  T b1 = beta + const_val<T, 1>;
+  T ab2 = alpha + beta + const_val<T, 2>;
 
-  T prev_prev_val = sqrt(gamma(ab2) / gamma(a1) / gamma(b1) / pow(two<T>, a1 + beta));
+  T prev_prev_val = sqrt(gamma(ab2) / gamma(a1) / gamma(b1) / pow(const_val<T, 2>, a1 + beta));
   if (n == 0) return prev_prev_val;
 
-  T prev_val = half<T> * prev_prev_val * sqrt((ab2 + one<T>) / a1 / b1) * (ab2 * x + alpha - beta);
+  T prev_val = (const_val<T, 1> / const_val<T, 2>) * prev_prev_val * sqrt((ab2 + const_val<T, 1>) / a1 / b1) * (ab2 * x + alpha - beta);
   if (n == 1) return prev_val;
 
   T val;
-  T a_i = two<T> / ab2 * sqrt((a1 + beta) * a1 * b1 / (ab2 - one<T>) / (ab2 + one<T>));
+  T a_i = const_val<T, 2> / ab2 * sqrt((a1 + beta) * a1 * b1 / (ab2 - const_val<T, 1>) / (ab2 + const_val<T, 1>));
   for (std::size_t i = 1; i < n; ++i)
   {
-    T iab = two<T> * i + alpha + beta;
-    T b_i = (alpha + beta) * (beta - alpha) / iab / (iab + two<T>);
-    T a_n = two<T> / (iab + two<T>) * sqrt((i + one<T>) * (i + a1 + beta) * (i + a1) * (i + b1) / (iab + one<T>) / (iab + one<T> + two<T>));
+    T iab = const_val<T, 2> * i + alpha + beta;
+    T b_i = (alpha + beta) * (beta - alpha) / iab / (iab + const_val<T, 2>);
+    T a_n = const_val<T, 2> / (iab + const_val<T, 2>) * sqrt((i + const_val<T, 1>) * (i + a1 + beta) * (i + a1) * (i + b1) / (iab + const_val<T, 1>) / (iab + const_val<T, 3>));
     val = ((x - b_i) * prev_val - a_i * prev_prev_val) / a_n;
 
     a_i = a_n;
@@ -83,24 +75,24 @@ T jacobi_polynomial_value(T alpha, T beta, std::size_t n, T x)
 template<typename T, typename OutputIterator>
 void jacobi_polynomial_values(T alpha, T beta, std::size_t n, T x, OutputIterator it)
 {
-  T a1 = alpha + one<T>;
-  T b1 = beta + one<T>;
-  T ab2 = alpha + beta + two<T>;
+  T a1 = alpha + const_val<T, 1>;
+  T b1 = beta + const_val<T, 1>;
+  T ab2 = alpha + beta + const_val<T, 2>;
 
-  T prev_prev_val = sqrt(gamma(ab2) / gamma(a1) / gamma(b1) / pow(two<T>, a1 + beta));
+  T prev_prev_val = sqrt(gamma(ab2) / gamma(a1) / gamma(b1) / pow(const_val<T, 2>, a1 + beta));
   it = prev_prev_val;
   if (n == 0) return;
 
-  T prev_val = half<T> * prev_prev_val * sqrt((ab2 + one<T>) / a1 / b1) * (ab2 * x + alpha - beta);
+  T prev_val = (const_val<T, 1> / const_val<T, 2>) * prev_prev_val * sqrt((ab2 + const_val<T, 1>) / a1 / b1) * (ab2 * x + alpha - beta);
   it = prev_val;
   if (n == 1) return;
 
-  T a_i = two<T> / ab2 * sqrt((a1 + beta) * a1 * b1 / (ab2 - one<T>) / (ab2 + one<T>));
+  T a_i = const_val<T, 2> / ab2 * sqrt((a1 + beta) * a1 * b1 / (ab2 - const_val<T, 1>) / (ab2 + const_val<T, 1>));
   for (std::size_t i = 1; i < n; ++i)
   {
-    T iab = two<T> * i + alpha + beta;
-    T b_i = (alpha + beta) * (beta - alpha) / iab / (iab + two<T>);
-    T a_n = two<T> / (iab + two<T>) * sqrt((i + one<T>) * (i + a1 + beta) * (i + a1) * (i + b1) / (iab + one<T>) / (iab + one<T> + two<T>));
+    T iab = const_val<T, 2> * i + alpha + beta;
+    T b_i = (alpha + beta) * (beta - alpha) / iab / (iab + const_val<T, 2>);
+    T a_n = const_val<T, 2> / (iab + const_val<T, 2>) * sqrt((i + const_val<T, 1>) * (i + a1 + beta) * (i + a1) * (i + b1) / (iab + const_val<T, 1>) / (iab + const_val<T, 3>));
     T val = ((x - b_i) * prev_val - a_i * prev_prev_val) / a_n;
     it = val;
 
@@ -113,46 +105,46 @@ void jacobi_polynomial_values(T alpha, T beta, std::size_t n, T x, OutputIterato
 template<typename T>
 T jacobi_polynomial_derivative(T alpha, T beta, std::size_t n, T x)
 {
-  if (n == 0) return T{}; // zero
+  if (n == 0) return const_val<T, 0>;
 
-  T val = jacobi_polynomial_value(alpha + one<T>, beta + one<T>, n - 1, x);
-  return sqrt(n * (n + alpha + beta + one<T>)) * val;
+  T val = jacobi_polynomial_value(alpha + const_val<T, 1>, beta + const_val<T, 1>, n - 1, x);
+  return sqrt(n * (n + alpha + beta + const_val<T, 1>)) * val;
 }
 
 template<typename T, typename OutputIterator>
 void jacobi_polynomial_derivatives(T alpha, T beta, std::size_t n, T x, OutputIterator it)
 {
-  it = T{}; // zero
+  it = const_val<T, 0>;
   if (n == 0) return;
   
   T input_alpha = alpha;
   T input_beta = beta;
 
-  alpha = alpha + one<T>;
-  beta = beta + one<T>;
+  alpha = alpha + const_val<T, 1>;
+  beta = beta + const_val<T, 1>;
   n = n - 1;
 
   // repeat the code for evaluating values at the new (alpha, beta, n)
-  T a1 = alpha + one<T>;
-  T b1 = beta + one<T>;
-  T ab2 = alpha + beta + two<T>;
+  T a1 = alpha + const_val<T, 1>;
+  T b1 = beta + const_val<T, 1>;
+  T ab2 = alpha + beta + const_val<T, 2>;
 
-  T prev_prev_val = sqrt(gamma(ab2) / gamma(a1) / gamma(b1) / pow(two<T>, a1 + beta));
-  it = sqrt(input_alpha + input_beta + two<T>) * prev_prev_val;
+  T prev_prev_val = sqrt(gamma(ab2) / gamma(a1) / gamma(b1) / pow(const_val<T, 2>, a1 + beta));
+  it = sqrt(input_alpha + input_beta + const_val<T, 2>) * prev_prev_val;
   if (n == 0) return;
 
-  T prev_val = half<T> * prev_prev_val * sqrt((ab2 + one<T>) / a1 / b1) * (ab2 * x + alpha - beta);
-  it = sqrt(two<T> * (two<T> + input_alpha + input_beta + one<T>)) * prev_val;
+  T prev_val = (const_val<T, 1> / const_val<T, 2>) * prev_prev_val * sqrt((ab2 + const_val<T, 1>) / a1 / b1) * (ab2 * x + alpha - beta);
+  it = sqrt(const_val<T, 2> * (const_val<T, 2> + input_alpha + input_beta + const_val<T, 1>)) * prev_val;
   if (n == 1) return;
 
-  T a_i = two<T> / ab2 * sqrt((a1 + beta) * a1 * b1 / (ab2 - one<T>) / (ab2 + one<T>));
+  T a_i = const_val<T, 2> / ab2 * sqrt((a1 + beta) * a1 * b1 / (ab2 - const_val<T, 1>) / (ab2 + const_val<T, 1>));
   for (std::size_t i = 1; i < n; ++i)
   {
-    T iab = two<T> * i + alpha + beta;
-    T b_i = (alpha + beta) * (beta - alpha) / iab / (iab + two<T>);
-    T a_n = two<T> / (iab + two<T>) * sqrt((i + one<T>) * (i + a1 + beta) * (i + a1) * (i + b1) / (iab + one<T>) / (iab + one<T> + two<T>));
+    T iab = const_val<T, 2> * i + alpha + beta;
+    T b_i = (alpha + beta) * (beta - alpha) / iab / (iab + const_val<T, 2>);
+    T a_n = const_val<T, 2> / (iab + const_val<T, 2>) * sqrt((i + const_val<T, 1>) * (i + a1 + beta) * (i + a1) * (i + b1) / (iab + const_val<T, 1>) / (iab + const_val<T, 3>));
     T val = ((x - b_i) * prev_val - a_i * prev_prev_val) / a_n;
-    it = sqrt((i + 2) * ((i + 2) + input_alpha + input_beta + one<T>)) * val;
+    it = sqrt((i + 2) * ((i + 2) + input_alpha + input_beta + const_val<T, 1>)) * val;
 
     a_i = a_n;
     prev_prev_val = prev_val;

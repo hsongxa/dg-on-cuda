@@ -78,7 +78,10 @@ struct d_linear_wave_1d
     T bL = *(in + (cid  + 1) * m_NumRows - 1);
     T bR = cid == m_NumCells - 1 ? bL : *(in + (cid + 1) * m_NumRows);
 
-    // IMPORTANT LEARNING: on device, dynamic memory allocation on heap is many times (>20) sllowers than static
+    // IMPORTANT LEARNING: on device, dynamic memory allocation on heap is many times (>20) slower than static allocation!
+    // We could remove the hard-coded size of the array allocation as well - for 1D problems what only matters is the
+    // first and last entries so we could just allocate two and simplify the following gemv calculation by directly
+    // calculating the results of these two entries. But we do not pursue it here as this won't carry to 2D or 3D problems.
     T inVec[10]; // = (T*)malloc(m_NumRows * sizeof(T));
     T outVec[10];// = (T*)malloc(m_NumRows * sizeof(T));
     for (int i = 0; i < m_NumRows; ++i)
@@ -95,7 +98,7 @@ struct d_linear_wave_1d
     for (int j = 0; j < m_NumRows; ++j)
       *(out + (cid * m_NumRows + j)) += outVec[j];
 
-    // IMPORTANT LEARNING: on device, dynamic memory allocation on heap is many times (>20) sllowers than static
+    // IMPORTANT LEARNING: on device, dynamic memory allocation on heap is many times (>20) slower than static allocation!
     //free(inVec);
     //free(outVec);
   }
