@@ -22,24 +22,15 @@
  * SOFTWARE.
  **/
 
-#ifndef ORTHONORMAL_BASIS_SEGMENT_H
-#define ORTHONORMAL_BASIS_SEGMENT_H
+#ifndef CONST_VAL_H
+#define CONST_VAL_H 
 
-#include "const_val.h"
-#include "jacobi_polynomial.h"
+#include "config.h"
 
 BEGIN_NAMESPACE
 
-// 1D orthonormal basis defined on [-1, 1]
-template<typename T>
-struct orthonormal_basis_segment
-{
-  static T value(std::size_t order, T x)
-  { return jacobi_polynomial_value(const_val<T, 0>, const_val<T, 0>, order, x); }
-
-  static T derivative(std::size_t order, T x)
-  { return jacobi_polynomial_derivative(const_val<T, 0>, const_val<T, 0>, order, x); }
-};
+template<typename T, int I>
+constexpr T const_val = static_cast<T>(I);
 
 END_NAMESPACE
 

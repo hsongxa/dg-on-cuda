@@ -28,6 +28,7 @@
 #include <vector>
 #include <limits>
 
+#include "const_val.h"
 #include "jacobi_polynomial.h"
 #include "dense_matrix.h"
 #include "quadrature_rules.h"
@@ -53,7 +54,7 @@ private:
 
   static std::pair<T, T> rs_to_ab(T r, T s)
   {
-    T a = s == one<T> ? - one<T> : two<T> * (one<T> + r) / (one<T> - s) - one<T>;
+    T a = s == const_val<T, 1> ? - const_val<T, 1> : const_val<T, 2> * (const_val<T, 1> + r) / (const_val<T, 1> - s) - const_val<T, 1>;
     return std::make_pair(a, s);
   }
 
@@ -105,8 +106,8 @@ void alpha_optimized_nodes_triangle<T>::node_positions(std::size_t order, Output
 { 
   assert(order > 0);
 
-  T alpha = order < 16 ? s_alpha[order - 1] : T(5) / T(3);
-  T sqrt3 = sqrt(one<T> + two<T>);
+  T alpha = order < 16 ? s_alpha[order - 1] : const_val<T, 5> / const_val<T, 3>;
+  T sqrt3 = sqrt(const_val<T, 1> + const_val<T, 2>);
 
   // this looping determines the ordering of nodes (consistent with the ordering of vertices)
   for (std::size_t i = 0; i <= order; ++i)
@@ -114,25 +115,25 @@ void alpha_optimized_nodes_triangle<T>::node_positions(std::size_t order, Output
     for (std::size_t j = 0; j <= (order - i); ++j)
     {
       // generate equal distance node in a symmetrical equilateral triangle
-      T l1 = T(i) / T(order);
-      T l3 = T(j) / T(order);
-      T l2 = one<T> - l1 - l3;
+      T l1 = static_cast<T>(i) / static_cast<T>(order);
+      T l3 = static_cast<T>(j) / static_cast<T>(order);
+      T l2 = const_val<T, 1> - l1 - l3;
 
       T x = l3 - l2;
-      T y = (two<T> * l1 - l2 - l3) / sqrt3;
+      T y = (const_val<T, 2> * l1 - l2 - l3) / sqrt3;
 
       // move the node based on wraping and blending
-      T wrap1 = two<T> * two<T> * l2 * l3 * (one<T> + alpha * l1 * alpha * l1) * wrap_factor(order, l3 - l2);
-      T wrap2 = two<T> * two<T> * l3 * l1 * (one<T> + alpha * l2 * alpha * l2) * wrap_factor(order, l1 - l3);
-      T wrap3 = two<T> * two<T> * l1 * l2 * (one<T> + alpha * l3 * alpha * l3) * wrap_factor(order, l2 - l1);
+      T wrap1 = const_val<T, 2> * const_val<T, 2> * l2 * l3 * (const_val<T, 1> + alpha * l1 * alpha * l1) * wrap_factor(order, l3 - l2);
+      T wrap2 = const_val<T, 2> * const_val<T, 2> * l3 * l1 * (const_val<T, 1> + alpha * l2 * alpha * l2) * wrap_factor(order, l1 - l3);
+      T wrap3 = const_val<T, 2> * const_val<T, 2> * l1 * l2 * (const_val<T, 1> + alpha * l3 * alpha * l3) * wrap_factor(order, l2 - l1);
 
-      x += (wrap1 - half<T> * wrap2 - half<T> * wrap3);
-      y += half<T> * sqrt3 * (wrap2 - wrap3);
+      x += (wrap1 - (const_val<T, 1> / const_val<T, 2>) * wrap2 - (const_val<T, 1> / const_val<T, 2>) * wrap3);
+      y += (const_val<T, 1> / const_val<T, 2>) * sqrt3 * (wrap2 - wrap3);
 
       // transfer the position in the equilateral triangle to the reference triangle
-      l1 = (one<T> + sqrt3 * y) / T(3);
-      l2 = (two<T> - T(3) * x - sqrt3 * y) / T(6);
-      l3 = (two<T> + T(3) * x - sqrt3 * y) / T(6);
+      l1 = (const_val<T, 1> + sqrt3 * y) / const_val<T, 3>;
+      l2 = (const_val<T, 2> - const_val<T, 3> * x - sqrt3 * y) / const_val<T, 6>;
+      l3 = (const_val<T, 2> + const_val<T, 3> * x - sqrt3 * y) / const_val<T, 6>;
 
       it = std::make_pair(l3 - l2 - l1, l1 - l2 - l3);
     }
@@ -148,17 +149,17 @@ T alpha_optimized_nodes_triangle<T>::wrap_factor(std::size_t order, T r)
   {
     // equal distance node positions
     std::vector<T> equal_dist_pos(order + 1);
-    equal_dist_pos[0] = - one<T>;
-    equal_dist_pos[order] = one<T>;
+    equal_dist_pos[0] = - const_val<T, 1>;
+    equal_dist_pos[order] = const_val<T, 1>;
     for (std::size_t i = 1; i < order; ++i)
-      equal_dist_pos[i] = two<T> * T(i) / T(order) - one<T>;
+      equal_dist_pos[i] = const_val<T, 2> * static_cast<T>(i) / static_cast<T>(order) - const_val<T, 1>;
 
     // transpose of the vandermonde matrix based on the equal distance node positions
     dense_matrix<T, false> v(order + 1, order + 1);
     for (std::size_t col = 0; col < v.size_col(); ++col)
     {
       std::vector<T> vals;
-      jacobi_polynomial_values(T{}, T{}, order, equal_dist_pos[col], std::back_inserter(vals));
+      jacobi_polynomial_values(const_val<T, 0>, const_val<T, 0>, order, equal_dist_pos[col], std::back_inserter(vals));
       for(std::size_t row = 0; row < v.size_row(); ++row)
         v(row, col) = vals[row];
     }
@@ -176,15 +177,15 @@ T alpha_optimized_nodes_triangle<T>::wrap_factor(std::size_t order, T r)
   }
 
   std::vector<T> p_vals;
-  jacobi_polynomial_values(T{}, T{}, order, r, std::back_inserter(p_vals));
-  std::vector<T> l_vals(order + 1, T{});
-  s_wrap_factor_matrix.gemv(one<T>, p_vals.begin(), T{}, l_vals.begin());
+  jacobi_polynomial_values(const_val<T, 0>, const_val<T, 0>, order, r, std::back_inserter(p_vals));
+  std::vector<T> l_vals(order + 1, const_val<T, 0>);
+  s_wrap_factor_matrix.gemv(const_val<T, 1>, p_vals.begin(), const_val<T, 0>, l_vals.begin());
 
   T w = 0;
   for (std::size_t i = 0; i <= order; ++i)
     w += l_vals[i] * s_wrap_factor_dist[i];
 
-  return std::abs(r) < (one<T> - std::numeric_limits<T>::epsilon() * 10) ? w / (one<T> - r * r) : T{}; // hard-coded tolerance to avoid singularity!
+  return std::abs(r) < (const_val<T, 1> - std::numeric_limits<T>::epsilon() * 10) ? w / (const_val<T, 1> - r * r) : const_val<T, 0>; // hard-coded tolerance to avoid singularity!
 }
 
 END_NAMESPACE

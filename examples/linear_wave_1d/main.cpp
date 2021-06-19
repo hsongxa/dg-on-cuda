@@ -52,7 +52,7 @@ double compute_error_norm(std::vector<double>& x, double* v, double t)
 int main(int argc, char **argv) {
 
   const int numCells = 1024 * 8;
-  const int order = 3;
+  const int order = 6;
   linear_wave_1d<double> op(numCells, order);
 #if !defined USE_CPU_ONLY
   // create the device object (on device)
@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
   // time advancing loop
   int totalTSs = 10000;
   double t = 0.0;
-  double dt = 0.15 * 0.75 * op.min_elem_size() / op.wave_speed();
+  double dt = 1.0 / order / order * op.min_elem_size() / op.wave_speed();
   int blockSize = 1024;
   int blockDim = (numCells + blockSize - 1) / blockSize;
   auto t0 = std::chrono::system_clock::now();
@@ -115,8 +115,8 @@ int main(int argc, char **argv) {
   auto t1 = std::chrono::system_clock::now();
 
   // output the last error
-  double errNorm = compute_error_norm(x, v, t - dt);
-  std::cout << "t = " << t - dt << ", error norm = " << errNorm << std::endl;
+  double errNorm = compute_error_norm(x, v, t);
+  std::cout << "t = " << t << ", error norm = " << errNorm << std::endl;
   std::cout << "time used: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms" << std::endl;
 
   // output to visualize
