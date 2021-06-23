@@ -22,7 +22,7 @@
  * SOFTWARE.
  **/
 
-#include "k_linear_wave_1d.cuh"
+#include "k_advection_1d.cuh"
 
 #include "explicit_runge_kutta.h"
 #include "device_SemiDiscOp_wrapper.h"
@@ -35,10 +35,10 @@
 // NOTE: version we use. If we could use c++17 for CUDA code, we wouldn't need this .cu file -- we
 // NOTE: could simply instantiate the kernel templates in the main() function and change main.cpp
 // NOTE: to main.cu.
-void k_linear_wave_1d(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
-                      d_linear_wave_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4)
+void k_advection_1d(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
+                    d_advection_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4)
 { 
-  dgc::device_SemiDiscOp_wrapper<d_linear_wave_1d<double>> w;
+  dgc::device_SemiDiscOp_wrapper<d_advection_1d<double>> w;
   w.m_Dop = d_op;
   w.m_GridSize = gridSize;
   w.m_BlockSize = blockSize;

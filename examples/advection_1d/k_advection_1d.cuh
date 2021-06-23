@@ -22,13 +22,13 @@
  * SOFTWARE.
  **/
 
-#ifndef K_LINEAR_WAVE_1D_CUH
-#define K_LINEAR_WAVE_1D_CUH
+#ifndef K_ADVECTION_1D_CUH
+#define K_ADVECTION_1D_CUH
 
-#include "d_linear_wave_1d.cuh"
+#include "d_advection_1d.cuh"
 
 // NOTE: See the note of the companion .cu file.
-void k_linear_wave_1d(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
-                      d_linear_wave_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);
+void k_advection_1d(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
+                    d_advection_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);
 
 #endif

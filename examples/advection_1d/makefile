@@ -41,7 +41,7 @@ SRCS := $(wildcard *.cpp) $(wildcard $(SRC_DIR)/*.cpp)
 OBJS := $(patsubst %.cpp, %.o, $(notdir $(SRCS)))
 
 # =========== build  ===========
-EXEC := linear_wave_1d
+EXEC := advection_1d
 CUDA_LINK_OBJ := cuLink.o
 
 all: $(EXEC)
