@@ -22,6 +22,7 @@
  * SOFTWARE.
  **/
 
+#include <cstdlib>
 #include <vector>
 #include <iterator>
 #include <iostream>
@@ -31,11 +32,11 @@
 
 #include <cuda_runtime.h>
 
-#include "linear_wave_1d.h"
+#include "advection_1d.h"
 #include "explicit_runge_kutta.h"
 #if !defined USE_CPU_ONLY
-#include "d_linear_wave_1d.cuh"
-#include "k_linear_wave_1d.cuh"
+#include "d_advection_1d.cuh"
+#include "k_advection_1d.cuh"
 #endif
 
 double compute_error_norm(std::vector<double>& x, double* v, double t)
@@ -51,13 +52,19 @@ double compute_error_norm(std::vector<double>& x, double* v, double t)
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
 
-  const int numCells = 1024 * 8;
-  const int order = 6;
-  linear_wave_1d<double> op(numCells, order);
+  int numCells = 1024 * 8;
+  int order = 6;
+  if (argc > 1)
+  {
+    numCells = std::atoi(argv[1]);
+    order = std::atoi(argv[2]);
+  }
+
+  advection_1d<double> op(numCells, order);
 #if !defined USE_CPU_ONLY
   // create the device object (on device)
-  d_linear_wave_1d<double>* dOp;
-  cudaMalloc(&dOp, sizeof(d_linear_wave_1d<double>));
+  d_advection_1d<double>* dOp;
+  cudaMalloc(&dOp, sizeof(d_advection_1d<double>));
   double* dMM;
   double* dML;
   cudaMalloc(&dMM, (order + 1) * (order + 1) * sizeof(double));
@@ -65,13 +72,13 @@ int main(int argc, char **argv) {
   cudaMemcpy(dMM, op.m_M.data(), (order + 1) * (order + 1) * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(dML, op.m_L.data(), (order + 1) * (order + 1) * sizeof(double), cudaMemcpyHostToDevice);
 
-  d_linear_wave_1d<double> tmp;
+  d_advection_1d<double> tmp;
   tmp.m_M = dMM;
   tmp.m_L = dML;
   tmp.m_NumRows = order + 1;
   tmp.m_NumCols = order + 1;
   tmp.m_NumCells = numCells;
-  cudaMemcpy(dOp, &tmp, sizeof(d_linear_wave_1d<double>), cudaMemcpyHostToDevice);
+  cudaMemcpy(dOp, &tmp, sizeof(d_advection_1d<double>), cudaMemcpyHostToDevice);
 #endif
 
   std::vector<double> x;
@@ -98,7 +105,7 @@ int main(int argc, char **argv) {
   // time advancing loop
   int totalTSs = 10000;
   double t = 0.0;
-  double dt = 1.0 / order / order * op.min_elem_size() / op.wave_speed();
+  double dt = 0.25 / order / order * op.min_elem_size() / op.wave_speed();
   int blockSize = 1024;
   int blockDim = (numCells + blockSize - 1) / blockSize;
   auto t0 = std::chrono::system_clock::now();
@@ -107,7 +114,7 @@ int main(int argc, char **argv) {
 #if defined USE_CPU_ONLY
     dgc::rk4(v, numDOFs, t, dt, op, &dgc::axpy_n<const double*, double, double*>, v1, v2, v3, v4, v5);
 #else
-    k_linear_wave_1d(blockDim, blockSize, v, numDOFs, t, dt, dOp, v1, v2, v3, v4, v5);
+    k_advection_1d(blockDim, blockSize, v, numDOFs, t, dt, dOp, v1, v2, v3, v4, v5);
     cudaDeviceSynchronize();
 #endif
     t += dt;
@@ -121,7 +128,7 @@ int main(int argc, char **argv) {
 
   // output to visualize
   std::ofstream file;
-  file.open("LinearWave1DDataFile.txt");
+  file.open("Advection1DDataFile.txt");
   file.precision(std::numeric_limits<double>::digits10);
   file << "#         x         y" << std::endl;
   for(int i = 0; i < numDOFs; ++i)

@@ -22,17 +22,17 @@
  * SOFTWARE.
  **/
 
-#ifndef D_LINEAR_WAVE_1D_CUH
-#define D_LINEAR_WAVE_1D_CUH
+#ifndef D_ADVECTION_1D_CUH
+#define D_ADVECTION_1D_CUH
 
 #include <cstddef>
 #include <math.h>
 
 #include "gemv.cuh"
 
-// device code which is a simplified version of the linear_wave_1d class on host
+// device code which is a simplified version of the advection_1d class on host
 template<typename T>
-struct d_linear_wave_1d
+struct d_advection_1d
 {
   T* m_M;
   T* m_L;

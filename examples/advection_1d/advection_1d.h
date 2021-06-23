@@ -22,8 +22,8 @@
  * SOFTWARE.
  **/
 
-#ifndef LINEAR_WAVE_1D_H
-#define LINEAR_WAVE_1D_H
+#ifndef ADVECTION_1D_H
+#define ADVECTION_1D_H 
 
 #include <vector>
 #include <iterator>
@@ -33,13 +33,13 @@
 #include "dense_matrix.h"
 #include "reference_segment.h"
 
-// host code that represent the problem of linear wave equation in one dimensional space
+// host code that represent the problem of linear advection equation in one dimensional space
 template<typename T>
-class linear_wave_1d
+class advection_1d
 {
 public:
-  linear_wave_1d(int numCells, int order); 
-  ~linear_wave_1d(){}
+  advection_1d(int numCells, int order); 
+  ~advection_1d(){}
   
   T wave_speed() const { return s_waveSpeed; }
 
@@ -85,7 +85,7 @@ private:
 };
 
 template<typename T>
-linear_wave_1d<T>::linear_wave_1d(int numCells, int order)
+advection_1d<T>::advection_1d(int numCells, int order)
   : m_numCells(numCells), m_order(order)
 {
   reference_element refElem;
@@ -103,7 +103,7 @@ linear_wave_1d<T>::linear_wave_1d(int numCells, int order)
 }
 
 template<typename T> template<typename OutputIterator>
-void linear_wave_1d<T>::dof_positions(OutputIterator it) const
+void advection_1d<T>::dof_positions(OutputIterator it) const
 {
   reference_element refElem;
   std::vector<T> pos;
@@ -117,7 +117,7 @@ void linear_wave_1d<T>::dof_positions(OutputIterator it) const
 }
 
 template<typename T> template<typename ConstItr>
-void linear_wave_1d<T>::numerical_fluxes(ConstItr cbegin, T t) const
+void advection_1d<T>::numerical_fluxes(ConstItr cbegin, T t) const
 {
   int numFluxes = m_numCells + 1;
   if (m_numericalFluxes.size() < numFluxes) m_numericalFluxes.resize(numFluxes);
@@ -135,7 +135,7 @@ void linear_wave_1d<T>::numerical_fluxes(ConstItr cbegin, T t) const
 }
 
 template<typename T> template<typename ConstItr, typename Itr>
-void linear_wave_1d<T>::operator()(ConstItr in_cbegin, std::size_t size, T t, Itr out_begin) const
+void advection_1d<T>::operator()(ConstItr in_cbegin, std::size_t size, T t, Itr out_begin) const
 {
   numerical_fluxes(in_cbegin, t);
 
