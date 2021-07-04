@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <math.h>
 
+#include "config.h"
 #include "dense_matrix.h"
 #include "reference_segment.h"
 
@@ -46,16 +47,21 @@ public:
   // reference element and mapping
   T min_elem_size() const { return s_domainSize / m_numCells; }
 
-  template<typename OutputIterator>
-  void dof_positions(OutputIterator it) const;
+  int num_dofs() const { return m_numCells * (m_order + 1); }
 
-  // put it all together: it is a discrete operator
+  // the layout of DOFs in memory are different for CPU execution and GPU execution;
+  // the first iterator sets the DOF positions and the second iterator sets the
+  // initial values of the DOFs
+  template<typename OutputIterator1, typename OutputIterator2>
+  void initialize_dofs(OutputIterator1 it1, OutputIterator2 it2) const;
+
+  // CPU execution 
   template<typename ConstItr, typename Itr>
   void operator()(ConstItr in_cbegin, std::size_t size, T t, Itr out_begin) const;
 
   // need to easily copy these matrices to device so make them public
   using dense_matrix = dgc::dense_matrix<T, false>; // row major
-  dense_matrix m_M;
+  dense_matrix m_V;
   dense_matrix m_L;
 
 private:
@@ -93,27 +99,33 @@ advection_1d<T>::advection_1d(int numCells, int order)
   dense_matrix mInv = v * v.transpose();
 
   T h = s_domainSize / m_numCells;
-
-  m_L = mInv;
-  m_L = m_L * ((T)(2.0L) / h);
+  m_L = mInv * ((T)(2.0L) / h);
 
   dense_matrix dr = refElem.grad_vandermonde_matrix(m_order) * v.inverse();
   dense_matrix s = mInv.inverse() * dr;
-  m_M = m_L * s;
+  m_V = m_L * s;
 }
 
-template<typename T> template<typename OutputIterator>
-void advection_1d<T>::dof_positions(OutputIterator it) const
+template<typename T> template<typename OutputIterator1, typename OutputIterator2>
+void advection_1d<T>::initialize_dofs(OutputIterator1 it1, OutputIterator2 it2) const
 {
   reference_element refElem;
   std::vector<T> pos;
   refElem.node_positions(m_order, std::back_inserter(pos));
 
-  // could be extracted to a class of mapping
   T h = s_domainSize / m_numCells;
+#if defined USE_CPU_ONLY
   for (int i = 0; i < m_numCells; ++i)
     for (int j = 0; j < pos.size(); ++j)
-      it = i * h + ((T)(1.L) + pos[j]) * (T)(0.5L) * h;
+#else
+  for (int j = 0; j < pos.size(); ++j)
+    for (int i = 0; i < m_numCells; ++i)
+#endif
+    {
+      double x = i * h + ((T)(1.L) + pos[j]) * (T)(0.5L) * h;
+      *it1++ = x;
+      *it2++ = std::sin(x);
+    }
 }
 
 template<typename T> template<typename ConstItr>
@@ -145,7 +157,7 @@ void advection_1d<T>::operator()(ConstItr in_cbegin, std::size_t size, T t, Itr 
 
   for (int cell = 0; cell < m_numCells; ++cell)
   {
-    m_M.gemv(-s_waveSpeed, in_cbegin + (cell * np), (T)(0.0L), out_begin + (cell * np));
+    m_V.gemv(-s_waveSpeed, in_cbegin + (cell * np), (T)(0.0L), out_begin + (cell * np));
 
     std::fill(in_vec.begin(), in_vec.end(), (T)(0.0L));
     std::fill(out_vec.begin(), out_vec.end(), (T)(0.0L));

@@ -69,28 +69,25 @@ int main(int argc, char **argv) {
   double* dML;
   cudaMalloc(&dMM, (order + 1) * (order + 1) * sizeof(double));
   cudaMalloc(&dML, (order + 1) * (order + 1) * sizeof(double));
-  cudaMemcpy(dMM, op.m_M.data(), (order + 1) * (order + 1) * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(dMM, op.m_V.data(), (order + 1) * (order + 1) * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(dML, op.m_L.data(), (order + 1) * (order + 1) * sizeof(double), cudaMemcpyHostToDevice);
 
   d_advection_1d<double> tmp;
-  tmp.m_M = dMM;
+  tmp.m_V = dMM;
   tmp.m_L = dML;
   tmp.m_NumRows = order + 1;
-  tmp.m_NumCols = order + 1;
   tmp.m_NumCells = numCells;
   cudaMemcpy(dOp, &tmp, sizeof(d_advection_1d<double>), cudaMemcpyHostToDevice);
 #endif
 
-  std::vector<double> x;
-  op.dof_positions(std::back_inserter(x));
-
-  // initial condition
-  int numDOFs = numCells * (order +  1);
+  // DOF positions and initial conditions
+  int numDOFs = op.num_dofs();
+  std::vector<double> x(numDOFs);
   double* v;
   cudaMallocManaged(&v, numDOFs * sizeof(double)); // unified memory
-  for (int i = 0; i < numDOFs; ++i) v[i] = std::sin(x[i]);
+  op.initialize_dofs(x.begin(), v);
 
-  // allocate work space for Runge-Kutta loop
+  // allocate work space for the Runge-Kutta loop
   double* v1;
   double* v2;
   double* v3;
