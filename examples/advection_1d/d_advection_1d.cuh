@@ -30,15 +30,16 @@
 
 #include "gemv.cuh"
 
+#define MAX_APPROX_ORDER 6
+
 // device code which is a simplified version of the advection_1d class on host
 template<typename T>
 struct d_advection_1d
 {
-  T* m_M;
+  T* m_V;
   T* m_L;
 
   int m_NumRows;
-  int m_NumCols;
   int m_NumCells;
 
   // Future Generalization -- to conduct DG calculations, what we really need are:
@@ -52,7 +53,7 @@ struct d_advection_1d
   // In one dimensional space, #3 is trivial and #1 and #2 degenerates to the data above for
   // uniform mesh and problem with one scalar variable of fixed approximation order. But for
   // higher dimensional spaces and unstructured meshes with h/p adaptivity, we need explicit
-  // mappings of all three.
+  // mappings of all of them.
 
   // problem definitions
   const T s_waveSpeed = (T)(2.L) * (T)(M_PI);
@@ -69,35 +70,37 @@ struct d_advection_1d
   // process the specified cell 
   __device__ void operator()(std::size_t cid, const T* in, std::size_t size, T t, T* out) const
   {
+    // coalesced memory access requires a certain layout of entries of "in" and "out"
+
     // NOTE: mapping #0 and #1
-    dgc::gemv(m_M, false, m_NumRows, m_NumCols, -s_waveSpeed, in + cid * m_NumRows, (T)(0.0L), out + cid * m_NumRows);
+    dgc::gemv(m_V, false, m_NumRows, m_NumRows, -s_waveSpeed, in + cid, m_NumCells, (T)(0.0L), out + cid, m_NumCells);
 
     // lifting starts from calculating numerical fluxes
-    T aL = cid == 0 ? bc_dirichlet(t) : *(in + cid * m_NumRows - 1);
-    T aR = *(in + cid * m_NumRows);
-    T bL = *(in + (cid  + 1) * m_NumRows - 1);
-    T bR = cid == m_NumCells - 1 ? bL : *(in + (cid + 1) * m_NumRows);
+    T aL = cid == 0 ? bc_dirichlet(t) : *(in + m_NumCells * (m_NumRows - 1) + cid - 1);
+    T aR = *(in + cid);
+    T bL = *(in + m_NumCells * (m_NumRows - 1) + cid);
+    T bR = cid == m_NumCells - 1 ? bL : *(in + cid + 1);
 
     // IMPORTANT LEARNING: on device, dynamic memory allocation on heap is many times (>20) slower than static allocation!
     // We could remove the hard-coded size of the static array allocation - for 1D problems what only matters is the first
     // and last entries so we could just allocate two and simplify the following gemv calculation by directly calculating
     // the results of these two entries. But we do not pursue it here as this won't carry to 2D and 3D problems. The general
     // solution is to define a maximum approximation order at compile time and allocate according to that maximum here.
-    T inVec[10]; // = (T*)malloc(m_NumRows * sizeof(T));
-    T outVec[10];// = (T*)malloc(m_NumRows * sizeof(T));
+    T inVec[MAX_APPROX_ORDER + 1]; // = (T*)malloc(m_NumRows * sizeof(T));
+    T outVec[MAX_APPROX_ORDER + 1];// = (T*)malloc(m_NumRows * sizeof(T));
     for (int i = 0; i < m_NumRows; ++i)
     {
       inVec[i] = (T)(0.0L);
       outVec[i] = (T)(0.0L);
     }
-    inVec[0] = numerical_flux(aL, aR) - s_waveSpeed * *(in + (cid * m_NumRows));
-    inVec[m_NumRows - 1] = s_waveSpeed * *(in + ((cid + 1) * m_NumRows - 1)) - numerical_flux(bL, bR);
+    inVec[0] = numerical_flux(aL, aR) - s_waveSpeed * *(in + cid);
+    inVec[m_NumRows - 1] = s_waveSpeed * *(in + m_NumCells * (m_NumRows - 1) + cid) - numerical_flux(bL, bR);
 
     // NOTE: mapping #0 and #1
-    dgc::gemv(m_L, false, m_NumRows, m_NumCols, (T)(1.0L), inVec, (T)(1.0L), outVec);
+    dgc::gemv(m_L, false, m_NumRows, m_NumRows, (T)(1.0L), inVec, 1, (T)(1.0L), outVec, 1);
 
     for (int j = 0; j < m_NumRows; ++j)
-      *(out + (cid * m_NumRows + j)) += outVec[j];
+      *(out + m_NumCells * j + cid) += outVec[j];
 
     // IMPORTANT LEARNING: on device, dynamic memory allocation on heap is many times (>20) slower than static allocation!
     //free(inVec);
