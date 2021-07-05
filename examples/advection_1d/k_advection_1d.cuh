@@ -27,8 +27,12 @@
 
 #include "d_advection_1d.cuh"
 
+d_advection_1d<double>* create_device_object(int num_cells, int order, double* m_v, double* m_l);
+
 // NOTE: See the note of the companion .cu file.
-void k_advection_1d(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
-                    d_advection_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);
+void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
+                   d_advection_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);
+
+void destroy_device_object(d_advection_1d<double>* device_obj);
 
 #endif
