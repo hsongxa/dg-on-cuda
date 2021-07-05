@@ -62,22 +62,7 @@ int main(int argc, char **argv) {
 
   advection_1d<double> op(numCells, order);
 #if !defined USE_CPU_ONLY
-  // create the device object (on device)
-  d_advection_1d<double>* dOp;
-  cudaMalloc(&dOp, sizeof(d_advection_1d<double>));
-  double* dMM;
-  double* dML;
-  cudaMalloc(&dMM, (order + 1) * (order + 1) * sizeof(double));
-  cudaMalloc(&dML, (order + 1) * (order + 1) * sizeof(double));
-  cudaMemcpy(dMM, op.m_V.data(), (order + 1) * (order + 1) * sizeof(double), cudaMemcpyHostToDevice);
-  cudaMemcpy(dML, op.m_L.data(), (order + 1) * (order + 1) * sizeof(double), cudaMemcpyHostToDevice);
-
-  d_advection_1d<double> tmp;
-  tmp.m_V = dMM;
-  tmp.m_L = dML;
-  tmp.m_NumRows = order + 1;
-  tmp.m_NumCells = numCells;
-  cudaMemcpy(dOp, &tmp, sizeof(d_advection_1d<double>), cudaMemcpyHostToDevice);
+  d_advection_1d<double>* dOp = create_device_object(numCells, order, op.m_V.data(), op.m_L.data());
 #endif
 
   // DOF positions and initial conditions
@@ -111,7 +96,7 @@ int main(int argc, char **argv) {
 #if defined USE_CPU_ONLY
     dgc::rk4(v, numDOFs, t, dt, op, &dgc::axpy_n<const double*, double, double*>, v1, v2, v3, v4, v5);
 #else
-    k_advection_1d(blockDim, blockSize, v, numDOFs, t, dt, dOp, v1, v2, v3, v4, v5);
+    rk4_on_device(blockDim, blockSize, v, numDOFs, t, dt, dOp, v1, v2, v3, v4, v5);
     cudaDeviceSynchronize();
 #endif
     t += dt;
@@ -142,9 +127,7 @@ int main(int argc, char **argv) {
   cudaFree(v4);
   cudaFree(v5);
 #if !defined USE_CPU_ONLY
-  cudaFree(dOp);
-  cudaFree(dMM);
-  cudaFree(dML);
+  destroy_device_object(dOp);
 #endif
 
   return 0;

@@ -35,8 +35,35 @@
 // NOTE: version we use. If we could use c++17 for CUDA code, we wouldn't need this .cu file -- we
 // NOTE: could simply instantiate the kernel templates in the main() function and change main.cpp
 // NOTE: to main.cu.
-void k_advection_1d(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
-                    d_advection_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4)
+
+__constant__ double c_V[(MAX_APPROX_ORDER + 1) * (MAX_APPROX_ORDER + 1)];
+__constant__ double c_L[(MAX_APPROX_ORDER + 1) * (MAX_APPROX_ORDER + 1)];
+
+d_advection_1d<double>* create_device_object(int num_cells, int order, double* m_v, double* m_l)
+{
+  cudaMemcpyToSymbol(c_V, m_v, (order + 1) * (order + 1) * sizeof(double));
+  cudaMemcpyToSymbol(c_L, m_l, (order + 1) * (order + 1) * sizeof(double));
+
+  double* d_V;
+  double* d_L;
+  cudaGetSymbolAddress((void**)&d_V, c_V);
+  cudaGetSymbolAddress((void**)&d_L, c_L);
+
+  d_advection_1d<double> tmp;
+  tmp.m_V = d_V;
+  tmp.m_L = d_L;
+  tmp.m_NumRows = order + 1;
+  tmp.m_NumCells = num_cells;
+
+  d_advection_1d<double>* dOp;
+  cudaMalloc(&dOp, sizeof(d_advection_1d<double>));
+  cudaMemcpy(dOp, &tmp, sizeof(d_advection_1d<double>), cudaMemcpyHostToDevice);
+
+  return dOp;
+}
+
+void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
+                   d_advection_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4)
 { 
   dgc::device_SemiDiscOp_wrapper<d_advection_1d<double>> w;
   w.m_Dop = d_op;
@@ -45,3 +72,7 @@ void k_advection_1d(int gridSize, int blockSize, double* inout, std::size_t size
 
   dgc::rk4(inout, size, t, dt, w, &dgc::k_axpy_auto<double>, wk0, wk1, wk2, wk3, wk4);
 }
+
+void destroy_device_object(d_advection_1d<double>* device_obj)
+{ cudaFree(device_obj); }
+
