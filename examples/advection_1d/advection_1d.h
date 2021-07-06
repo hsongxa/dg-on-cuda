@@ -55,6 +55,10 @@ public:
   template<typename OutputIterator1, typename OutputIterator2>
   void initialize_dofs(OutputIterator1 it1, OutputIterator2 it2) const;
 
+  // the layout of DOFs in memory are different for CPU execution and GPU execution
+  template<typename OutputIterator>
+  void exact_solution(T t, OutputIterator it) const;
+
   // CPU execution 
   template<typename ConstItr, typename Itr>
   void operator()(ConstItr in_cbegin, std::size_t size, T t, Itr out_begin) const;
@@ -116,15 +120,36 @@ void advection_1d<T>::initialize_dofs(OutputIterator1 it1, OutputIterator2 it2) 
   T h = s_domainSize / m_numCells;
 #if defined USE_CPU_ONLY
   for (int i = 0; i < m_numCells; ++i)
-    for (int j = 0; j < pos.size(); ++j)
+    for (std::size_t j = 0; j < pos.size(); ++j)
 #else
-  for (int j = 0; j < pos.size(); ++j)
+  for (std::size_t j = 0; j < pos.size(); ++j)
     for (int i = 0; i < m_numCells; ++i)
 #endif
     {
       double x = i * h + ((T)(1.L) + pos[j]) * (T)(0.5L) * h;
       *it1++ = x;
       *it2++ = std::sin(x);
+    }
+}
+
+template<typename T> template<typename OutputIterator>
+void advection_1d<T>::exact_solution(T t, OutputIterator it) const
+{
+  reference_element refElem;
+  std::vector<T> pos;
+  refElem.node_positions(m_order, std::back_inserter(pos));
+
+  T h = s_domainSize / m_numCells;
+#if defined USE_CPU_ONLY
+  for (int i = 0; i < m_numCells; ++i)
+    for (std::size_t j = 0; j < pos.size(); ++j)
+#else
+  for (std::size_t j = 0; j < pos.size(); ++j)
+    for (int i = 0; i < m_numCells; ++i)
+#endif
+    {
+      double x = i * h + ((T)(1.L) + pos[j]) * (T)(0.5L) * h;
+      *it++ = std::sin(x - s_waveSpeed * t);
     }
 }
 

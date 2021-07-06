@@ -22,8 +22,8 @@
  * SOFTWARE.
  **/
 
-#ifndef DEVICE_SEMIDISCOP_WRAPPER_H
-#define DEVICE_SEMIDISCOP_WRAPPER_H
+#ifndef DEVICE_SEMIDISCOP_WRAPPER_CUH
+#define DEVICE_SEMIDISCOP_WRAPPER_CUH
 
 #include "config.h"
 
@@ -40,7 +40,7 @@ struct device_SemiDiscOp_wrapper
 
   template<typename T>
   void operator()(const T* in_cbegin, std::size_t size, T t, T* out_begin) const
-  { dgc::k_opx(m_GridSize, m_BlockSize, in_cbegin, size, t, out_begin, m_Dop); }
+  { k_opx(m_GridSize, m_BlockSize, in_cbegin, size, t, out_begin, m_Dop); }
 };
 
 END_NAMESPACE

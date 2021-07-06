@@ -24,8 +24,8 @@
 
 #include "k_advection_1d.cuh"
 
+#include "device_SemiDiscOp_wrapper.cuh"
 #include "explicit_runge_kutta.h"
-#include "device_SemiDiscOp_wrapper.h"
 #include "k_axpy.cuh"
 
 // NOTE: The sole purpose of this .cu file is to have an entry point to start the nvcc compilation
@@ -65,6 +65,9 @@ d_advection_1d<double>* create_device_object(int num_cells, int order, double* m
 void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
                    d_advection_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4)
 { 
+  // NOTE: For the same reason as documented at the beginning of this file, the instantiation of the wrapper object
+  // NOTE: has to be here, rather than in the main(). But ideally it should be pulled to the main() and just do the
+  // NOTE: instantiation once outside the time advancing loop, instead of repeatedly doing it here at every time step.
   dgc::device_SemiDiscOp_wrapper<d_advection_1d<double>> w;
   w.m_Dop = d_op;
   w.m_GridSize = gridSize;
