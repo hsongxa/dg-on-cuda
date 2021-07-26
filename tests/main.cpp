@@ -38,8 +38,10 @@ int main(int argc, char **argv) {
   //  std::cout << "test_quadrature_rules FAILED!!!" << std::endl;
   //if (test_reference_segment())
   //  std::cout << "test_reference_segment FAILED!!!" << std::endl;
-  if (test_reference_triangle())
-    std::cout << "test_reference_triangle FAILED!!!" << std::endl;
+  //if (test_reference_triangle())
+  //  std::cout << "test_reference_triangle FAILED!!!" << std::endl;
+  if (test_simple_triangular_mesh_2d())
+    std::cout << "test_simple_triangular_mesh_2d FAILED!!!" << std::endl;
 
   // finish
   return 0;
