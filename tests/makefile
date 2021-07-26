@@ -1,7 +1,8 @@
 DEBUG ?= 1
 
 SRC_DIR := ../src
-VPATH := $(SRC_DIR)
+SRC_MSH_DIR := ../src/mesh
+VPATH := $(SRC_DIR):$(SRC_MSH_DIR)
 
 # CUDA root path
 CUDA_PATH := /usr/local/cuda-10.2
@@ -33,10 +34,10 @@ ifeq ($(DEBUG),1)
   CFLAGS += -g3 -O0
 endif
 
-INCL := -I$(SRC_DIR)
+INCL := -I$(SRC_DIR) -I$(SRC_MSH_DIR)
 LIBS :=# ARE THERE LICENSE ISSUES OF USING THESE LIBRARIES?
 
-SRCS := $(wildcard *.cpp) $(wildcard $(SRC_DIR)/*.cpp)
+SRCS := $(wildcard *.cpp) $(wildcard $(SRC_DIR)/*.cpp) $(wildcard $(SRC_MSH_DIR)/*.cpp)
 OBJS := $(patsubst %.cpp, %.o, $(notdir $(SRCS)))
 
 # =========== build  ===========
@@ -45,8 +46,12 @@ CUDA_LINK_OBJ := cuLink.o
 
 all: $(EXEC)
 $(EXEC): $(CUDA_OBJS) $(OBJS)
+ifeq ($(strip $(CUDA_OBJS)), )
+	$(CC) -o $@ $(OBJS) $(LIBS)
+else
 	$(NVCC) $(GPU_CARD) $(CUDA_LINK_FLAGS) -o $(CUDA_LINK_OBJ) $(CUDA_OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBS) $(CUDA_OBJS) $(CUDA_LINK_OBJ) $(CUDA_LIBS)
+endif
 
 %.o: %.cpp
 	$(CC) $(INCL) $(CUDA_INCL) $(CFLAGS) -c $< -o $@

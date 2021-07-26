@@ -35,4 +35,6 @@
 
   int test_reference_triangle();
 
+  int test_simple_triangular_mesh_2d();
+
 #endif
