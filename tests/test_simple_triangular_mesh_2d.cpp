@@ -28,6 +28,7 @@
 #include "encoded_integer.h"
 #include "basic_geom_2d.h"
 #include "simple_triangular_mesh_2d.h"
+#include "gmsh_importer_exporter.h"
 
 int test_simple_triangular_mesh_2d()
 {
@@ -132,7 +133,18 @@ int test_simple_triangular_mesh_2d()
     std::cout << "neighbor of cell " << j << " at edge 1: (" << cell_interfaces[j * 3 + 1] / 4 << ", " << (cell_interfaces[j * 3 + 1] & 3) << ")" << std::endl;
     std::cout << "neighbor of cell " << j << " at edge 2: (" << cell_interfaces[j * 3 + 2] / 4 << ", " << (cell_interfaces[j * 3 + 2] & 3) << ")" << std::endl;
   }
+  std::cout << std::endl;
 
-    std::cout << std::endl;
+  // import/export mesh
+  auto mesh_ptr = gmsh_importer_exporter<double, int>::import_triangle_mesh_2d("nonexisting.msh");
+  std::cout << "imported mesh from a non-existing MSH file has number of cells = " << mesh_ptr->num_cells() << std::endl;
+  std::cout << "imported mesh from a non-existing MSH file has number of vertices = " << mesh_ptr->num_vertices() << std::endl;
+
+  mesh_ptr = gmsh_importer_exporter<double, int>::import_triangle_mesh_2d("square_domain_4cells.msh");
+  std::cout << "imported mesh from a non-existing MSH file has number of cells = " << mesh_ptr->num_cells() << std::endl;
+  std::cout << "imported mesh from a non-existing MSH file has number of vertices = " << mesh_ptr->num_vertices() << std::endl;
+  gmsh_importer_exporter<double, int>::export_triangle_mesh_2d(*mesh_ptr, "exported_square_domain_4cells.msh");
+  std::cout << "triangle mesh exported." << std::endl;
+
   return 0;
 }

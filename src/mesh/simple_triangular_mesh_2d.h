@@ -96,6 +96,13 @@ public:
                      vertex_type(std::get<0>(m_vertices[v[2]]), std::get<1>(m_vertices[v[2]])));
   }
 
+  // this is only needed for mesh export
+  std::tuple<IT, IT, IT> get_cell_connectivity(IT ci) const
+  {
+    const IT* v = m_cells[ci].connectivity;
+    return std::make_tuple(v[0], v[1], v[2]);
+  }
+
   face_type get_face(IT ci, int face) const
   {
     assert(face >= 0 && face < 3);
@@ -111,7 +118,7 @@ public:
     return std::make_tuple(hf.integer() != ci, hf.integer(), hf.code());
   }
 
-  // output all the cell interfaces
+  // output all the cell interfaces - needed for GPU execution
   template<typename OutputIt>
   void get_face_mapping(OutputIt it) const
   {
