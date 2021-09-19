@@ -29,7 +29,7 @@
 
 // NOTE: See the note of the companion .cu file.
 
-d_advection_1d<double>* create_device_object(int num_cells, int order, double* m_v, double* m_l);
+d_advection_1d<double>* create_device_object(int num_cells, int order, double* m_d, double* m_l);
 
 void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
                    d_advection_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);

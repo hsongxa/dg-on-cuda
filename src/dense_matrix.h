@@ -35,6 +35,7 @@
 #include <iostream>
 
 #include "config.h"
+#include "const_val.h"
 
 BEGIN_NAMESPACE
 
@@ -480,9 +481,8 @@ dense_matrix<T, CM, Alloc> dense_matrix<T, CM, Alloc>::inverse() const
   if (size == 0) return inv;
 
   // find adjoint
-  value_type one = static_cast<value_type>(1.0L); // TODO: properly retrieve one from type
   if (size == 1)
-    inv(0, 0) = one;
+    inv(0, 0) = const_val<value_type, 1>;
   else
   {
     dense_matrix tmp(size - 1, size - 1);
@@ -495,13 +495,12 @@ dense_matrix<T, CM, Alloc> dense_matrix<T, CM, Alloc>::inverse() const
       }
   }
 
-  return (one / determinant(*this)) * inv;
+  return (const_val<value_type, 1> / determinant(*this)) * inv;
 }
 
 template<typename T, bool CM, typename Alloc> template<typename InputItr, typename InOutItr>
 void dense_matrix<T, CM, Alloc>::gemv(value_type alpha, InputItr in_first, value_type beta, InOutItr inout_first) const
 {
-  assert(in_first != inout_first);
   if constexpr(CM)
   {
     for (const_pointer p = Base::start(); p < Base::start() + m_stride; ++p)  

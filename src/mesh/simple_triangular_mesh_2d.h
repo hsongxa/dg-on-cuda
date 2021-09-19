@@ -111,11 +111,12 @@ public:
                      vertex_type(std::get<0>(m_vertices[v[(face + 1) % 3]]), std::get<1>(m_vertices[v[(face + 1) % 3]])));
   }
 
+  // first item is true if the face is a boundary face
   std::tuple<bool, IT, int> get_face_neighbor(IT ci, int face) const
   {
     assert(face >= 0 && face < 3);
     hf_handle hf = m_cells[ci].twinhf[face];
-    return std::make_tuple(hf.integer() != ci, hf.integer(), hf.code());
+    return std::make_tuple(hf.integer() == ci, hf.integer(), hf.code());
   }
 
   // output all the cell interfaces - needed for GPU execution

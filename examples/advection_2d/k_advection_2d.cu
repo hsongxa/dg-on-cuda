@@ -22,7 +22,7 @@
  * SOFTWARE.
  **/
 
-#include "k_advection_1d.cuh"
+#include "k_advection_2d.cuh"
 
 #include "device_SemiDiscOp_wrapper.cuh"
 #include "explicit_runge_kutta.h"
@@ -39,7 +39,7 @@
 __constant__ double c_D[(MAX_APPROX_ORDER + 1) * (MAX_APPROX_ORDER + 1)];
 __constant__ double c_L[(MAX_APPROX_ORDER + 1) * (MAX_APPROX_ORDER + 1)];
 
-d_advection_1d<double>* create_device_object(int num_cells, int order, double* m_d, double* m_l)
+d_advection_2d<double>* create_device_object(int num_cells, int order, double* m_d, double* m_l)
 {
   cudaMemcpyToSymbol(c_D, m_d, (order + 1) * (order + 1) * sizeof(double));
   cudaMemcpyToSymbol(c_L, m_l, (order + 1) * (order + 1) * sizeof(double));
@@ -49,26 +49,26 @@ d_advection_1d<double>* create_device_object(int num_cells, int order, double* m
   cudaGetSymbolAddress((void**)&d_D, c_D);
   cudaGetSymbolAddress((void**)&d_L, c_L);
 
-  d_advection_1d<double> tmp;
+  d_advection_2d<double> tmp;
   tmp.m_D = d_D;
   tmp.m_L = d_L;
   tmp.m_NumRows = order + 1;
   tmp.m_NumCells = num_cells;
 
-  d_advection_1d<double>* dOp;
-  cudaMalloc(&dOp, sizeof(d_advection_1d<double>));
-  cudaMemcpy(dOp, &tmp, sizeof(d_advection_1d<double>), cudaMemcpyHostToDevice);
+  d_advection_2d<double>* dOp;
+  cudaMalloc(&dOp, sizeof(d_advection_2d<double>));
+  cudaMemcpy(dOp, &tmp, sizeof(d_advection_2d<double>), cudaMemcpyHostToDevice);
 
   return dOp;
 }
 
 void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
-                   d_advection_1d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4)
+                   d_advection_2d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4)
 { 
   // NOTE: For the same reason as documented at the beginning of this file, the instantiation of the wrapper object
   // NOTE: has to be here, rather than in the main(). But ideally it should be pulled to the main() and just do the
   // NOTE: instantiation once outside the time advancing loop, instead of repeatedly doing it here at every time step.
-  dgc::device_SemiDiscOp_wrapper<d_advection_1d<double>> w;
+  dgc::device_SemiDiscOp_wrapper<d_advection_2d<double>> w;
   w.m_Dop = d_op;
   w.m_GridSize = gridSize;
   w.m_BlockSize = blockSize;
@@ -76,6 +76,6 @@ void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size,
   dgc::rk4(inout, size, t, dt, w, &dgc::k_axpy_auto<double>, wk0, wk1, wk2, wk3, wk4);
 }
 
-void destroy_device_object(d_advection_1d<double>* device_obj)
+void destroy_device_object(d_advection_2d<double>* device_obj)
 { cudaFree(device_obj); }
 

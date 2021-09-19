@@ -22,14 +22,18 @@
  * SOFTWARE.
  **/
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef K_ADVECTION_2D_CUH
+#define K_ADVECTION_2D_CUH
 
-// uncomment this line to run the code on CPU only
-#define USE_CPU_ONLY
+#include "d_advection_2d.cuh"
 
-#define BEGIN_NAMESPACE namespace dgc {
-#define END_NAMESPACE }
+// NOTE: See the note of the companion .cu file.
+
+d_advection_2d<double>* create_device_object(int num_cells, int order, double* m_d, double* m_l);
+
+void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
+                   d_advection_2d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);
+
+void destroy_device_object(d_advection_2d<double>* device_obj);
 
 #endif
-

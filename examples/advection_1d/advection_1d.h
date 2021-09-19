@@ -65,7 +65,7 @@ public:
 
   // need to easily copy these matrices to device so make them public
   using dense_matrix = dgc::dense_matrix<T, false>; // row major
-  dense_matrix m_V;
+  dense_matrix m_D;
   dense_matrix m_L;
 
 private:
@@ -101,13 +101,14 @@ advection_1d<T>::advection_1d(int numCells, int order)
   reference_element refElem;
   dense_matrix v = refElem.vandermonde_matrix(m_order);
   dense_matrix mInv = v * v.transpose();
-
   T h = s_domainSize / m_numCells;
-  m_L = mInv * ((T)(2.0L) / h);
 
+  // volume integration matrix
   dense_matrix dr = refElem.grad_vandermonde_matrix(m_order) * v.inverse();
-  dense_matrix s = mInv.inverse() * dr;
-  m_V = m_L * s;
+  m_D = dr * ((T)(2.0L) / h);
+
+  // surface integration matrix
+  m_L = mInv * ((T)(2.0L) / h);
 }
 
 template<typename T> template<typename OutputIterator1, typename OutputIterator2>
@@ -182,7 +183,7 @@ void advection_1d<T>::operator()(ConstItr in_cbegin, std::size_t size, T t, Itr 
 
   for (int cell = 0; cell < m_numCells; ++cell)
   {
-    m_V.gemv(-s_waveSpeed, in_cbegin + (cell * np), (T)(0.0L), out_begin + (cell * np));
+    m_D.gemv(-s_waveSpeed, in_cbegin + (cell * np), (T)(0.0L), out_begin + (cell * np));
 
     std::fill(in_vec.begin(), in_vec.end(), (T)(0.0L));
     std::fill(out_vec.begin(), out_vec.end(), (T)(0.0L));
