@@ -22,8 +22,8 @@
  * SOFTWARE.
  **/
 
-#ifndef D_ADVECTION_1D_CUH
-#define D_ADVECTION_1D_CUH
+#ifndef D_ADVECTION_2D_CUH
+#define D_ADVECTION_2D_CUH
 
 #include <cstddef>
 #include <math.h>
@@ -34,7 +34,7 @@
 
 // device code which is a simplified version of the advection_1d class on host
 template<typename T>
-struct d_advection_1d
+struct d_advection_2d
 {
   T* m_D;
   T* m_L;

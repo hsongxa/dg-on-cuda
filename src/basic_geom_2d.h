@@ -37,6 +37,8 @@ struct point_2d
 {
   using coordinate_type = CT;
 
+  point_2d() {}
+
   point_2d(CT x, CT y) : m_x(x), m_y(y) {}
 
   CT x() const { return m_x; }
@@ -55,6 +57,8 @@ private:
 template<typename PT>
 struct segment_2d
 {
+  using point_type = PT;
+
   segment_2d(PT v0, PT v1) : m_v0(v0), m_v1(v1) {}
 
   PT v0() const { return m_v0; }
@@ -79,6 +83,8 @@ private:
 template<typename PT>
 struct triangle_2d
 {
+  using point_type = PT;
+
   triangle_2d(PT v0, PT v1, PT v2) : m_v0(v0), m_v1(v1), m_v2(v2) {}
 
   PT v0() const { return m_v0; }

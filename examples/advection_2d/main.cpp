@@ -22,6 +22,7 @@
  * SOFTWARE.
  **/
 
+#include <cmath>
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -30,11 +31,14 @@
 
 #include <cuda_runtime.h>
 
-#include "advection_1d.h"
+#include "basic_geom_2d.h"
+#include "simple_triangular_mesh_2d.h"
+#include "gmsh_importer_exporter.h"
+#include "advection_2d.h"
 #include "explicit_runge_kutta.h"
 #if !defined USE_CPU_ONLY
-#include "d_advection_1d.cuh"
-#include "k_advection_1d.cuh"
+#include "d_advection_2d.cuh"
+#include "k_advection_2d.cuh"
 #endif
 
 double compute_error_norm(double* ref_v, double* v, int size)
@@ -50,28 +54,30 @@ double compute_error_norm(double* ref_v, double* v, int size)
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
 
-  int numCells = 1024 * 8;
-  int order = 6;
+  const std::string meshFile = "square_domain_coarse.msh";
+  const auto meshPtr = dgc::gmsh_importer_exporter<double, int>::import_triangle_mesh_2d(meshFile);
+
+  int numCells = meshPtr->num_cells();
+  int order = 1;
 #if !defined USE_CPU_ONLY
   int blockSize = 1024;
 #endif
   if (argc > 1)
   {
-    numCells = std::atoi(argv[1]);
-    order = std::atoi(argv[2]);
+    order = std::atoi(argv[1]);
 #if !defined USE_CPU_ONLY
-    blockSize = std::atoi(argv[3]);
+    blockSize = std::atoi(argv[2]);
 #endif
   }
 
-  advection_1d<double> op(numCells, order);
+  advection_2d<double, dgc::simple_triangular_mesh_2d<double, int>> op(*meshPtr, order);
 #if !defined USE_CPU_ONLY
-  d_advection_1d<double>* dOp = create_device_object(numCells, order, op.m_D.data(), op.m_L.data());
+  d_advection_1d<double>* dOp = create_device_object(numCells, order, op.m_V.data(), op.m_L.data());
 #endif
 
   // DOF positions and initial conditions
   int numDOFs = op.num_dofs();
-  std::vector<double> x(numDOFs);
+  std::vector<dgc::point_2d<double>> x(numDOFs);
   double* v;
   cudaMallocManaged(&v, numDOFs * sizeof(double)); // unified memory
   op.initialize_dofs(x.begin(), v);
@@ -91,9 +97,10 @@ int main(int argc, char **argv) {
   cudaMallocManaged(&ref_v, numDOFs * sizeof(double));
   
   // time advancing loop
-  int totalTSs = 10000;
+  const int totalTSs = 10000;
   double t = 0.0;
-  double dt = 0.25 / order / order * op.min_elem_size() / op.wave_speed();
+  double l = 2.0 / std::sqrt(numCells); // length scale of a typical cell
+  double dt = (2.0 / 3.0) * (l / (double)order) * (l / (2.0 + std::sqrt(2.0))); // see p.199
 #if !defined USE_CPU_ONLY
   int blockDim = (numCells + blockSize - 1) / blockSize;
 #endif
@@ -121,15 +128,15 @@ int main(int argc, char **argv) {
 
   // output to visualize
   std::ofstream file;
-  file.open("Advection1DDataFile.txt");
+  file.open("Advection2DDataFile.txt");
   file.precision(std::numeric_limits<double>::digits10);
-  file << "#         x         y" << std::endl;
+  file << "#         x         y         u" << std::endl;
   for(int i = 0; i < numDOFs; ++i)
-    file << x[i] << "  " << v[i] << std::endl;
+    file << x[i].x() << "  " << x[i].y() << "  " << v[i] << std::endl;
   file << std::endl;
-  file << "#         x         reference solution" << std::endl;
+  file << "#         x         y         reference solution" << std::endl;
   for(int i = 0; i < numDOFs; ++i)
-    file << x[i] << " " << ref_v[i] << std::endl;
+    file << x[i].x() << "  " << x[i].y() << "  " << ref_v[i] << std::endl;
 
   cudaFree(v);
   cudaFree(v1);
