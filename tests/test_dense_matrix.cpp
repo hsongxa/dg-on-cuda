@@ -195,7 +195,6 @@ int test_dense_matrix()
   std::cout << std::endl << "empty matrix: size_row = " << empty.size_row() << ", size_col = " << empty.size_col();
   std::cout << std::endl << empty;
   std::cout << "transpose: " << empty.transpose();
-  std::cout << "inverse: " << empty.inverse();
   std::cout << "scalar product: " << 3.3 * empty;
   std::cout << "matrix addition: " << empty2 + empty;
   std::cout << "matrix product: " << empty * empty2;

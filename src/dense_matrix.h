@@ -32,6 +32,7 @@
 #include <cassert>
 #include <algorithm>
 #include <numeric>
+#include <cmath>
 #include <iostream>
 
 #include "config.h"
@@ -372,7 +373,7 @@ public:
   
   dense_matrix inverse() const;
 
-  value_type determinant() const { return determinant(*this); }
+  value_type determinant() const;
 
   template<typename InputItr, typename InOutItr>
   void gemv(value_type alpha, InputItr in_first, value_type beta, InOutItr inout_first) const;
@@ -452,51 +453,15 @@ private:
   template<typename P>
   const P* to_address(P* p) const { return p; }
 
+  dense_matrix inverse_by_adjoint() const;
+
   static void fill_cofactors(const dense_matrix& m, dense_matrix& cofactor, size_type i, size_type j);
 
-  static value_type determinant(const dense_matrix& m);
+  static value_type determinant_by_adjoint(const dense_matrix& m);
 
 private:
   size_type m_stride;
 };
-
-template<typename T, bool CM, typename Alloc>
-dense_matrix<T, CM, Alloc> dense_matrix<T, CM, Alloc>::transpose() const
-{
-  dense_matrix trans(size_col(), size_row());
-  pointer d = trans.start();
-  for (const_pointer p = Base::start(); p < Base::start() + m_stride; ++p)
-    for (const_pointer q = p; q < Base::start() + Base::size(); q += m_stride)
-      *d++ = *q;
-  return trans;
-}
-  
-template<typename T, bool CM, typename Alloc>
-dense_matrix<T, CM, Alloc> dense_matrix<T, CM, Alloc>::inverse() const
-{
-  assert(size_row() == size_col());
-
-  size_type size = size_row();
-  dense_matrix inv(size, size);
-  if (size == 0) return inv;
-
-  // find adjoint
-  if (size == 1)
-    inv(0, 0) = const_val<value_type, 1>;
-  else
-  {
-    dense_matrix tmp(size - 1, size - 1);
-    for (size_type i = 0; i < size; ++i)
-      for (size_type j = 0; j < size; ++j)
-      {
-        fill_cofactors(*this, tmp, i, j);
-        if ((i + j) % 2 == 0) inv(j, i) = determinant(tmp);
-        else inv(j, i) = - determinant(tmp);
-      }
-  }
-
-  return (const_val<value_type, 1> / determinant(*this)) * inv;
-}
 
 template<typename T, bool CM, typename Alloc> template<typename InputItr, typename InOutItr>
 void dense_matrix<T, CM, Alloc>::gemv(value_type alpha, InputItr in_first, value_type beta, InOutItr inout_first) const
@@ -523,6 +488,155 @@ void dense_matrix<T, CM, Alloc>::gemv(value_type alpha, InputItr in_first, value
       *inout_first++ = y;
     }
   }
+}
+
+template<typename T, bool CM, typename Alloc>
+dense_matrix<T, CM, Alloc> dense_matrix<T, CM, Alloc>::transpose() const
+{
+  dense_matrix trans(size_col(), size_row());
+  pointer d = trans.start();
+  for (const_pointer p = Base::start(); p < Base::start() + m_stride; ++p)
+    for (const_pointer q = p; q < Base::start() + Base::size(); q += m_stride)
+      *d++ = *q;
+  return trans;
+}
+
+// the Gauss-Jordan method
+template<typename T, bool CM, typename Alloc>
+dense_matrix<T, CM, Alloc> dense_matrix<T, CM, Alloc>::inverse() const
+{
+  assert(size_row() == size_col());
+  assert(size_row() > 0); 
+
+  size_type size = size_row();
+  dense_matrix inv(size, size);
+  if (size == 1)
+  {
+    assert(this->operator()(0, 0) != 0); // not invertible
+    inv(0, 0) = const_val<value_type, 1> / this->operator()(0, 0);
+    return inv;
+  }
+
+  for (size_type i = 0; i < size; ++i)
+    for (size_type j = 0; j < size; ++j)
+      inv(i, j) = i == j ? const_val<value_type, 1> : const_val<value_type, 0>;
+  dense_matrix tmp = *this;
+
+  for (size_type i = 0; i < size; ++i)
+  {
+    // find the pivot
+    size_type pivot = i;
+    for (size_type ii = i + 1; ii < size; ++ii)
+      if (std::abs(tmp(pivot, i)) < std::abs(tmp(ii, i))) pivot = ii;
+
+    // swap rows
+    if (pivot != i)
+    {
+      for (size_type j = 0; j < size; ++j)
+      {
+        std::swap(tmp(i, j), tmp(pivot, j));
+        std::swap(inv(i, j), inv(pivot, j));
+      }
+    }
+
+    value_type d = tmp(i, i);
+    assert(d != 0); // not invertible
+    for (size_type j = 0; j < size; ++j)
+    {
+      tmp(i, j) /= d;
+      inv(i, j) /= d;
+    }
+
+    // reduce to unit matrix by Gaussian elimination
+    for (size_type ii = 0; ii < size; ++ii)
+    {
+      if (ii != i)
+      {
+        d = tmp(ii, i);
+        for (size_type j = 0; j < size; ++j)
+        {
+          tmp(ii, j) -= d * tmp(i, j);
+          inv(ii, j) -= d * inv(i, j);
+        }
+      }
+    }
+  }
+
+  return inv;
+}
+
+// the Gauss-Jordan method
+template<typename T, bool CM, typename Alloc>
+typename dense_matrix<T, CM, Alloc>::value_type dense_matrix<T, CM, Alloc>::determinant() const
+{
+  assert(size_row() == size_col());
+  assert(size_row() > 0); 
+
+  size_type size = size_row();
+  if (size == 1) return this->operator()(0, 0);
+
+  dense_matrix tmp = *this;
+
+  bool flip_sign = false;
+  for (size_type i = 0; i < size; ++i)
+  {
+    // find the pivot
+    size_type pivot = i;
+    for (size_type ii = i + 1; ii < size; ++ii)
+      if (std::abs(tmp(pivot, i)) < std::abs(tmp(ii, i))) pivot = ii;
+
+    // swap rows
+    if (pivot != i)
+    {
+      for (size_type j = 0; j < size; ++j)
+        std::swap(tmp(i, j), tmp(pivot, j));
+      flip_sign = !flip_sign;
+    }
+
+    value_type p = tmp(i, i);
+
+    // reduce to upper triangle matrix by Gaussian elimination
+    for (size_type ii = i + 1; ii < size; ++ii)
+    {
+      value_type l = tmp(ii, i);
+      for (size_type j = 0; j < size; ++j)
+        tmp(ii, j) -= l / p * tmp(i, j);
+    }
+  }
+
+  value_type d = tmp(0, 0);
+  for (size_type i = 1; i < size; ++i)
+    d *= tmp(i, i);
+
+  return flip_sign ? -d : d;
+}
+
+// be aware of the O(n!) complexity!
+template<typename T, bool CM, typename Alloc>
+dense_matrix<T, CM, Alloc> dense_matrix<T, CM, Alloc>::inverse_by_adjoint() const
+{
+  assert(size_row() == size_col());
+
+  size_type size = size_row();
+  dense_matrix inv(size, size);
+  if (size == 0) return inv;
+
+  // find adjoint
+  if (size == 1)
+    inv(0, 0) = const_val<value_type, 1>;
+  else
+  {
+    dense_matrix tmp(size - 1, size - 1);
+    for (size_type i = 0; i < size; ++i)
+      for (size_type j = 0; j < size; ++j)
+      {
+        fill_cofactors(*this, tmp, i, j);
+        if ((i + j) % 2 == 0) inv(j, i) = determinant_by_adjoint(tmp);
+        else inv(j, i) = - determinant_by_adjoint(tmp);
+      }
+  }
+
+  return (const_val<value_type, 1> / determinant_by_adjoint(*this)) * inv;
 }
 
 template<typename T, bool CM, typename Alloc>
@@ -561,8 +675,9 @@ void dense_matrix<T, CM, Alloc>::fill_cofactors(const dense_matrix& m, dense_mat
   }
 }
 
+// be aware of the O(n!) complexity!
 template<typename T, bool CM, typename Alloc>
-typename dense_matrix<T, CM, Alloc>::value_type dense_matrix<T, CM, Alloc>::determinant(const dense_matrix& m)
+typename dense_matrix<T, CM, Alloc>::value_type dense_matrix<T, CM, Alloc>::determinant_by_adjoint(const dense_matrix& m)
 {
   assert(m.size_row() == m.size_col());
 
@@ -577,8 +692,8 @@ typename dense_matrix<T, CM, Alloc>::value_type dense_matrix<T, CM, Alloc>::dete
   for (size_type f = 0; f < size; ++f)
   {
     fill_cofactors(m, tmp, 0, f);
-    if (sign) d += m(0, f) * determinant(tmp);
-    else d -= m(0, f) * determinant(tmp);
+    if (sign) d += m(0, f) * determinant_by_adjoint(tmp);
+    else d -= m(0, f) * determinant_by_adjoint(tmp);
     sign = (!sign);
   }
 
