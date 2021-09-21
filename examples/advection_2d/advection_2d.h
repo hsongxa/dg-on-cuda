@@ -27,8 +27,6 @@
 
 #include <utility>
 #include <vector>
-//#include <iterator>
-//#include <algorithm>
 #include <math.h>
 
 #include "config.h"
