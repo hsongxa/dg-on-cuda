@@ -72,7 +72,27 @@ int main(int argc, char **argv) {
 
   advection_2d<double, dgc::simple_triangular_mesh_2d<double, int>> op(*meshPtr, order);
 #if !defined USE_CPU_ONLY
-  d_advection_1d<double>* dOp = create_device_object(numCells, order, op.m_V.data(), op.m_L.data());
+  std::vector<double> inv_jacobians;
+  std::vector<double> Js;
+  std::vector<double> face_Js;
+  op.fill_cell_mappings(std::back_inserter(inv_jacobians), std::back_inserter(Js), std::back_inserter(face_Js));
+
+  std::vector<int> interface_cells;
+  std::vector<int> interface_faces;
+  op.fill_cell_interfaces(std::back_inserter(interface_cells), std::back_inserter(interface_faces));
+
+  std::vector<double> boundary_node_Xs;
+  std::vector<double> boundary_node_Ys;
+  int num_boundary_nodes = op.fill_boundary_nodes(std::back_inserter(boundary_node_Xs), std::back_inserter(boundary_node_Ys));
+
+  double *d_inv_jacobians, *d_Js, *d_face_Js, *d_boundary_node_Xs, *d_boundary_node_Ys;
+  int *d_interface_cells, *d_interface_faces;
+  d_advection_2d<double, int>* dOp = create_device_object(numCells, order, op.m_Dr.data(), op.m_Ds.data(), op.m_L.data(),
+                                                          inv_jacobians.data(), Js.data(), face_Js.data(),
+                                                          interface_cells.data(), interface_faces.data(), num_boundary_nodes,
+                                                          boundary_node_Xs.data(), boundary_node_Ys.data(),
+                                                          &d_inv_jacobians, &d_Js, &d_face_Js, &d_interface_cells, &d_interface_faces,
+                                                          &d_boundary_node_Xs, &d_boundary_node_Ys);
 #endif
 
   // DOF positions and initial conditions
@@ -146,7 +166,8 @@ int main(int argc, char **argv) {
   cudaFree(v5);
   cudaFree(ref_v);
 #if !defined USE_CPU_ONLY
-  destroy_device_object(dOp);
+  destroy_device_object(dOp, d_inv_jacobians, d_Js, d_face_Js, d_interface_cells, d_interface_faces,
+                        d_boundary_node_Xs, d_boundary_node_Ys);
 #endif
 
   return 0;

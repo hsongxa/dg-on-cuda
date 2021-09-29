@@ -60,6 +60,14 @@ public:
   template<typename ConstItr, typename Itr>
   void operator()(ConstItr in_cbegin, std::size_t size, T t, Itr out_begin) const;
 
+  // prepare for GPU execution
+  template<typename OutputIterator1, typename OutputIterator2, typename OutputIterator3>
+  void fill_cell_mappings(OutputIterator1 it1, OutputIterator2 it2, OutputIterator3 it3) const;
+  template<typename OutputIterator1, typename OutputIterator2>
+  void fill_cell_interfaces(OutputIterator1 it1, OutputIterator2 it2) const;
+  template<typename OutputIterator1, typename OutputIterator2>
+  int fill_boundary_nodes(OutputIterator1 it1, OutputIterator2 it2) const; // return the number of boundary nodes
+
   // need to easily copy these data to device so make them public
   using dense_matrix = dgc::dense_matrix<T, false>; // row major
   dense_matrix m_Dr;
@@ -299,6 +307,101 @@ void advection_2d<T, M>::operator()(ConstItr in_cbegin, std::size_t size, T t, I
     for (int j = 0; j < numCellNodes; ++j)
       *(out_begin + (c * numCellNodes + j)) = vUx[j] + vUy[j] + sU[j];
   }
+}
+
+template<typename T, typename M> template<typename OutputIterator1, typename OutputIterator2, typename OutputIterator3>
+void advection_2d<T, M>::fill_cell_mappings(OutputIterator1 it1, OutputIterator2 it2, OutputIterator3 it3) const
+{
+  for (int c = 0; c < m_mesh->num_cells(); ++c)
+  {
+    *it1++ = m_invJacobians[c * 4];
+    *it1++ = m_invJacobians[c * 4 + 1];
+    *it1++ = m_invJacobians[c * 4 + 2];
+    *it1++ = m_invJacobians[c * 4 + 3];
+
+    const auto cell = m_mesh->get_cell(c);
+    *it2++ = mapping::J(cell);
+    *it3++ = mapping::face_J(cell, 0);
+    *it3++ = mapping::face_J(cell, 1);
+    *it3++ = mapping::face_J(cell, 2);
+  }
+} 
+
+// for interior faces, [cell, face] pair is mapped to [nbCell, nbFace] pair;
+// for a boundary face, the cell is mapped to itself and in the place of nbFace is the
+// offset to the array of boundary node coordinates populated by fill_boundary_nodes,
+// therefore, this function must iterate those boundary faces in the same order as
+// in fill_boundary_nodes
+template<typename T, typename M> template<typename OutputIterator1, typename OutputIterator2>
+void advection_2d<T, M>::fill_cell_interfaces(OutputIterator1 it1, OutputIterator2 it2) const
+{
+  reference_element refElem;
+  const int numFaceNodes = refElem.num_face_nodes(m_order);
+  int offset = 0;
+
+  bool isBoundary;
+  int nbCell, nbLocalEdgeIdx;
+  for (int c = 0; c < m_mesh->num_cells(); ++c)
+    for (int e = 0; e < 3; ++e)
+    {
+      std::tie(isBoundary, nbCell, nbLocalEdgeIdx) = m_mesh->get_face_neighbor(c, e);
+
+      if (isBoundary)
+      {
+        *it1++ = c;
+        *it2++ = offset;
+        offset += numFaceNodes;
+      }
+      else
+      {
+        *it1++ = nbCell;
+        *it2++ = nbLocalEdgeIdx;
+      }
+    }
+}
+
+// as noted in above, the order of iterating these boundary faces must be the same as
+// in fill_cell_interfaces
+template<typename T, typename M> template<typename OutputIterator1, typename OutputIterator2>
+int advection_2d<T, M>::fill_boundary_nodes(OutputIterator1 it1, OutputIterator2 it2) const
+{
+  reference_element refElem;
+  const int numFaceNodes = refElem.num_face_nodes(m_order);
+  int numBoundaryNodes = 0;
+
+  using point_type = dgc::point_2d<T>;
+  std::vector<std::pair<T, T>> pos;
+  refElem.node_positions(m_order, std::back_inserter(pos));
+  std::vector<int> allFaceNodes[3];
+  refElem.face_nodes(m_order, 0, std::back_inserter(allFaceNodes[0]));
+  refElem.face_nodes(m_order, 1, std::back_inserter(allFaceNodes[1]));
+  refElem.face_nodes(m_order, 2, std::back_inserter(allFaceNodes[2]));
+
+  bool isBoundary;
+  int nbCell, nbLocalEdgeIdx;
+  for (int c = 0; c < m_mesh->num_cells(); ++c)
+  {
+    const auto cell = m_mesh->get_cell(c);
+    for (int e = 0; e < 3; ++e)
+    {
+      std::tie(isBoundary, nbCell, nbLocalEdgeIdx) = m_mesh->get_face_neighbor(c, e);
+
+      if (isBoundary)
+      {
+        std::vector<int>& faceNodes = allFaceNodes[e];
+        for (int i = 0; i < numFaceNodes; ++i)
+        {
+          point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[i]].first, pos[faceNodes[i]].second));
+          *it1++ = xyPos.x();
+          *it2++ = xyPos.y();
+        }
+
+        numBoundaryNodes += numFaceNodes;
+      }
+    }
+  }
+
+  return numBoundaryNodes;
 }
 
 #endif
