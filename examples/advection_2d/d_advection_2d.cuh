@@ -30,48 +30,62 @@
 
 #include "gemv.cuh"
 
-#define MAX_APPROX_ORDER 6
+#define MAX_NUM_NODES 28
+#define MAX_NUM_FACE_NODES 7
 
-// device code which is a simplified version of the advection_1d class on host
-template<typename T>
+// device code which is a simplified version of the advection_2d class on host
+template<typename T, typename I>
 struct d_advection_2d
 {
-  T* m_D;
+  T* m_Dr;
+  T* m_Ds;
   T* m_L;
 
-  int m_NumRows;
-  int m_NumCells;
+  // mapping of reference element to physical elements
+  T* m_Inv_Jacobian;
+  T* m_J;
+  T* m_Face_J;
 
-  // Future Generalization -- to conduct DG calculations, what we really need are:
+  // cell interfaces (mapping of [cell, face] to [nbCell, nbFace])
+  // in the case of a boundary face, the mapping becomes [cell, face] to [cell (self), offset-to-m_Boundary_Nodes_X(Y)]
+  I* m_Interfaces_Cell;
+  I* m_Interfaces_Face;
+
+  // other data (those supplied by reference element) such as number of DOFs per element,
+  // number of DOFs on each face, ..., etc., can be derived from the approximation order,
+  // assuming single element type of triangle
+  int m_Order;
+  I m_Num_Cells;
+
+  // boundary geometry
+  T* m_Boundary_Nodes_X;
+  T* m_Boundary_Nodes_Y;
+
+  // To conduct DG calculations, we need:
   //
   // 0. mapping of cell index => starting positions to the respective variable vectors
   // 1. mapping of cell index => reference element (shape, approximation order) per vairable
-  //                          => these matrices per variable;
-  // 2. mapping of cell index => J (geometry);
+  //                          => D & L matrices per variable;
+  // 2. mapping of cell index => Jacobian matrix and J per cell and face J per face; 
   // 3. mapping of cell face to cell face;
+  // 4. geometry information of boundary faces if boundary conditions depend on it.
   //
-  // In one dimensional space, #3 is trivial and #1 and #2 degenerates to the data above for
-  // uniform mesh and problem with one scalar variable of fixed approximation order. But for
-  // higher dimensional spaces and unstructured meshes with h/p adaptivity, we need explicit
-  // mappings of all of them.
-
-  // problem definitions
-  const T s_waveSpeed = (T)(2.L) * (T)(M_PI);
-  const T s_alpha = (T)(0.0L); // 0 for upwind and 1 for central flux
+  // For triangle mesh and problems with one scalar variable of fixed approximation order,
+  // the above data are sufficient.
 
   // boundary conditions
   __device__ T bc_dirichlet(T t) const
-  { return  - sin(2.0 * M_PI * t); }
+  { return  0; }
 
   // numerical flux
   __device__ T numerical_flux(T a, T b) const 
-  { return s_waveSpeed * (T)(0.5L) * (a + b) + s_waveSpeed * (T)(0.5L) * ((T)(1.0L) - s_alpha) * (a - b); }
+  { return 0; }
 
   // process the specified cell 
   __device__ void operator()(std::size_t cid, const T* in, std::size_t size, T t, T* out) const
   {
     // coalesced memory access requires a certain layout of entries of "in" and "out"
-
+/*
     // NOTE: mapping #0 and #1
     dgc::gemv(m_D, false, m_NumRows, m_NumRows, -s_waveSpeed, in + cid, m_NumCells, (T)(0.0L), out + cid, m_NumCells);
 
@@ -101,14 +115,14 @@ struct d_advection_2d
 
     for (int j = 0; j < m_NumRows; ++j)
       *(out + m_NumCells * j + cid) += outVec[j];
-
+*/
     // IMPORTANT LEARNING: on device, dynamic memory allocation on heap is many times (>20) slower than static allocation!
     //free(inVec);
     //free(outVec);
   }
 
   // in addition, also need to tell kernel how many cells in total
-  __device__ std::size_t num_cells() const { return m_NumCells; }
+  __device__ I num_cells() const { return m_Num_Cells; }
 };
 
 #endif

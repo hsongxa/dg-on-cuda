@@ -29,11 +29,18 @@
 
 // NOTE: See the note of the companion .cu file.
 
-d_advection_2d<double>* create_device_object(int num_cells, int order, double* m_d, double* m_l);
+d_advection_2d<double, int>* create_device_object(int num_cells, int order, double* dr, double* ds, double* l,
+                                                  double* inv_jacobians, double* Js, double* face_Js,
+                                                  int* interface_cells, int* interface_faces, int num_boundary_nodes,
+                                                  double* boundary_node_Xs, double* boundary_node_Ys,
+                                                  double** d_inv_jacobians, double** d_Js, double** d_face_Js,
+                                                  int** d_interface_cells, int** d_interface_faces,
+                                                  double** d_boundary_node_Xs, double** d_boundary_node_Ys);
 
 void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
-                   d_advection_2d<double>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);
+                   d_advection_2d<double, int>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);
 
-void destroy_device_object(d_advection_2d<double>* device_obj);
+void destroy_device_object(d_advection_2d<double, int>* device_obj, double* d_inv_jacobians, double* d_Js, double* d_face_Js,
+                           int* d_interface_cells, int* d_interface_faces, double* d_boundary_node_Xs, double* d_boundary_node_Ys);
 
 #endif
