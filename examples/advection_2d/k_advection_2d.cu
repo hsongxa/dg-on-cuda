@@ -38,17 +38,24 @@
 // NOTE: could simply instantiate the kernel templates in the main() function and change main.cpp
 // NOTE: to main.cu.
 
-__constant__ double c_Dr[MAX_NUM_NODES * MAX_NUM_NODES];
-__constant__ double c_Ds[MAX_NUM_NODES * MAX_NUM_NODES];
-__constant__ double c_L[MAX_NUM_NODES * 3 * MAX_NUM_FACE_NODES];
+__constant__ double c_Dr[MAX_NUM_CELL_NODES * MAX_NUM_CELL_NODES];
+__constant__ double c_Ds[MAX_NUM_CELL_NODES * MAX_NUM_CELL_NODES];
+__constant__ double c_L[MAX_NUM_CELL_NODES * 3 * MAX_NUM_FACE_NODES];
+
+__constant__ int c_Face_0_Nodes[MAX_NUM_FACE_NODES];
+__constant__ int c_Face_1_Nodes[MAX_NUM_FACE_NODES];
+__constant__ int c_Face_2_Nodes[MAX_NUM_FACE_NODES];
 
 d_advection_2d<double, int>* create_device_object(int num_cells, int order, double* dr, double* ds, double* l,
+                                                  int* face_0_nodes, int* face_1_nodes, int* face_2_nodes,
                                                   double* inv_jacobians, double* Js, double* face_Js,
                                                   int* interface_cells, int* interface_faces, int num_boundary_nodes,
                                                   double* boundary_node_Xs, double* boundary_node_Ys,
+                                                  double* outward_normal_Xs, double* outward_normal_Ys,
                                                   double** d_inv_jacobians, double** d_Js, double** d_face_Js,
                                                   int** d_interface_cells, int** d_interface_faces,
-                                                  double** d_boundary_node_Xs, double** d_boundary_node_Ys)
+                                                  double** d_boundary_node_Xs, double** d_boundary_node_Ys,
+                                                  double** d_outward_normal_Xs, double** d_outward_normal_Ys)
 {
   assert(num_cells > 0);
   assert(order > 0 && order < 7);
@@ -57,32 +64,48 @@ d_advection_2d<double, int>* create_device_object(int num_cells, int order, doub
   cudaMemcpyToSymbol(c_Ds, ds, (order + 1) * (order + 1) * (order + 2) * (order + 2) / 4 * sizeof(double));
   cudaMemcpyToSymbol(c_L, l, (order + 1) * (order + 2) * 3 * (order + 1) / 2 * sizeof(double));
 
+  cudaMemcpyToSymbol(c_Face_0_Nodes, face_0_nodes, (order + 1) * sizeof(int));
+  cudaMemcpyToSymbol(c_Face_1_Nodes, face_1_nodes, (order + 1) * sizeof(int));
+  cudaMemcpyToSymbol(c_Face_2_Nodes, face_2_nodes, (order + 1) * sizeof(int));
+
   double *d_Dr, *d_Ds, *d_L;
   cudaGetSymbolAddress((void**)&d_Dr, c_Dr);
   cudaGetSymbolAddress((void**)&d_Ds, c_Ds);
   cudaGetSymbolAddress((void**)&d_L, c_L);
 
-  cudaMalloc(d_inv_jacobians, num_cells * 4 * sizeof(double));
-  cudaMalloc(d_Js, num_cells * sizeof(double));
-  cudaMalloc(d_face_Js, num_cells * 3 * sizeof(double));
+  int *d_F0_Nodes, *d_F1_Nodes, *d_F2_Nodes;
+  cudaGetSymbolAddress((void**)&d_F0_Nodes, c_Face_0_Nodes);
+  cudaGetSymbolAddress((void**)&d_F1_Nodes, c_Face_1_Nodes);
+  cudaGetSymbolAddress((void**)&d_F2_Nodes, c_Face_2_Nodes);
+
+  cudaMalloc((void**)d_inv_jacobians, num_cells * 4 * sizeof(double));
+  cudaMalloc((void**)d_Js, num_cells * sizeof(double));
+  cudaMalloc((void**)d_face_Js, num_cells * 3 * sizeof(double));
   cudaMemcpy(*d_inv_jacobians, inv_jacobians, num_cells * 4 * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(*d_Js, Js, num_cells * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(*d_face_Js, face_Js, num_cells * 3 * sizeof(double), cudaMemcpyHostToDevice);
 
-  cudaMalloc(d_interface_cells, num_cells * 3 * sizeof(int));
+  cudaMalloc((void**)d_interface_cells, num_cells * 3 * sizeof(int));
   cudaMemcpy(*d_interface_cells, interface_cells, num_cells * 3 * sizeof(int), cudaMemcpyHostToDevice);
-  cudaMalloc(d_interface_faces, num_cells * 3 * sizeof(int));
+  cudaMalloc((void**)d_interface_faces, num_cells * 3 * sizeof(int));
   cudaMemcpy(*d_interface_faces, interface_faces, num_cells * 3 * sizeof(int), cudaMemcpyHostToDevice);
 
-  cudaMalloc(d_boundary_node_Xs, num_boundary_nodes * sizeof(double));
+  cudaMalloc((void**)d_boundary_node_Xs, num_boundary_nodes * sizeof(double));
   cudaMemcpy(*d_boundary_node_Xs, boundary_node_Xs, num_boundary_nodes * sizeof(double), cudaMemcpyHostToDevice);
-  cudaMalloc(d_boundary_node_Ys, num_boundary_nodes * sizeof(double));
+  cudaMalloc((void**)d_boundary_node_Ys, num_boundary_nodes * sizeof(double));
   cudaMemcpy(*d_boundary_node_Ys, boundary_node_Ys, num_boundary_nodes * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMalloc((void**)d_outward_normal_Xs, num_cells * 3 * sizeof(double));
+  cudaMemcpy(*d_outward_normal_Xs, outward_normal_Xs, num_cells * 3 * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMalloc((void**)d_outward_normal_Ys, num_cells * 3 * sizeof(double));
+  cudaMemcpy(*d_outward_normal_Ys, outward_normal_Ys, num_cells * 3 * sizeof(double), cudaMemcpyHostToDevice);
   
   d_advection_2d<double, int> tmp;
   tmp.m_Dr = d_Dr;
   tmp.m_Ds = d_Ds;
   tmp.m_L = d_L;
+  tmp.m_Face_0_Nodes = d_F0_Nodes;
+  tmp.m_Face_1_Nodes = d_F1_Nodes;
+  tmp.m_Face_2_Nodes = d_F2_Nodes;
   tmp.m_Inv_Jacobian = *d_inv_jacobians;
   tmp.m_J = *d_Js;
   tmp.m_Face_J = *d_face_Js;
@@ -90,11 +113,13 @@ d_advection_2d<double, int>* create_device_object(int num_cells, int order, doub
   tmp.m_Interfaces_Face = *d_interface_faces;
   tmp.m_Boundary_Nodes_X = *d_boundary_node_Xs;
   tmp.m_Boundary_Nodes_Y = *d_boundary_node_Ys;
+  tmp.m_Outward_Normals_X = *d_outward_normal_Xs;
+  tmp.m_Outward_Normals_Y = *d_outward_normal_Ys;
   tmp.m_Order = order;
   tmp.m_Num_Cells = num_cells;
 
   d_advection_2d<double, int>* dOp;
-  cudaMalloc(&dOp, sizeof(d_advection_2d<double, int>));
+  cudaMalloc((void**)&dOp, sizeof(d_advection_2d<double, int>));
   cudaMemcpy(dOp, &tmp, sizeof(d_advection_2d<double, int>), cudaMemcpyHostToDevice);
 
   return dOp;
@@ -114,8 +139,9 @@ void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size,
   dgc::rk4(inout, size, t, dt, w, &dgc::k_axpy_auto<double>, wk0, wk1, wk2, wk3, wk4);
 }
 
-void destroy_device_object(d_advection_2d<double, int>* device_obj, double* d_inv_jacobians, double* d_Js, double* d_face_Js,
-                           int* d_interface_cells, int* d_interface_faces, double* d_boundary_node_Xs, double* d_boundary_node_Ys)
+void destroy_device_object(d_advection_2d<double, int>* device_obj, double* d_inv_jacobians, double* d_Js,
+                           double* d_face_Js, int* d_interface_cells, int* d_interface_faces, double* d_boundary_node_Xs,
+                           double* d_boundary_node_Ys, double* d_outward_normal_Xs, double* d_outward_normal_Ys)
 {
   cudaFree(d_inv_jacobians); 
   cudaFree(d_Js); 
@@ -124,6 +150,8 @@ void destroy_device_object(d_advection_2d<double, int>* device_obj, double* d_in
   cudaFree(d_interface_faces); 
   cudaFree(d_boundary_node_Xs); 
   cudaFree(d_boundary_node_Ys); 
+  cudaFree(d_outward_normal_Xs); 
+  cudaFree(d_outward_normal_Ys); 
 
   cudaFree(device_obj);
 }

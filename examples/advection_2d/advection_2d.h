@@ -67,12 +67,17 @@ public:
   void fill_cell_interfaces(OutputIterator1 it1, OutputIterator2 it2) const;
   template<typename OutputIterator1, typename OutputIterator2>
   int fill_boundary_nodes(OutputIterator1 it1, OutputIterator2 it2) const; // return the number of boundary nodes
+  template<typename OutputIterator1, typename OutputIterator2>
+  void fill_outward_normals(OutputIterator1 it1, OutputIterator2 it2) const;
 
   // need to easily copy these data to device so make them public
   using dense_matrix = dgc::dense_matrix<T, false>; // row major
   dense_matrix m_Dr;
   dense_matrix m_Ds;
   dense_matrix m_L;
+  std::vector<int> m_F0_Nodes;
+  std::vector<int> m_F1_Nodes;
+  std::vector<int> m_F2_Nodes;
   // inverse Jacobian matrix for each element
   std::vector<T> m_invJacobians;
 
@@ -120,6 +125,11 @@ advection_2d<T, M>::advection_2d(const M& mesh, int order)
         mE(eN[row], e * numFaceNodes + col) = eM(row, col);
   }
   m_L = mInv * mE;
+
+  // face node information
+  refElem.face_nodes(m_order, 0, std::back_inserter(m_F0_Nodes));
+  refElem.face_nodes(m_order, 1, std::back_inserter(m_F1_Nodes));
+  refElem.face_nodes(m_order, 2, std::back_inserter(m_F2_Nodes));
 
   // populate mapping
   m_invJacobians.resize(m_mesh->num_cells() * 4);
@@ -204,11 +214,6 @@ void advection_2d<T, M>::numerical_fluxes(ConstItr cbegin, T t) const
   std::vector<std::pair<T, T>> pos;
   refElem.node_positions(m_order, std::back_inserter(pos));
 
-  std::vector<int> allFaceNodes[3];
-  refElem.face_nodes(m_order, 0, std::back_inserter(allFaceNodes[0]));
-  refElem.face_nodes(m_order, 1, std::back_inserter(allFaceNodes[1]));
-  refElem.face_nodes(m_order, 2, std::back_inserter(allFaceNodes[2]));
-
   int numCellNodes = refElem.num_nodes(m_order);
   int numFaceNodes = refElem.num_face_nodes(m_order);
   T aU, bU; // "a" is interior or "-" and "b" is exterior or "+"
@@ -223,7 +228,7 @@ void advection_2d<T, M>::numerical_fluxes(ConstItr cbegin, T t) const
       int nbCell, nbLocalEdgeIdx;
       std::tie(isBoundary, nbCell, nbLocalEdgeIdx) = m_mesh->get_face_neighbor(c, e);
 
-      std::vector<int>& faceNodes = allFaceNodes[e];
+      const std::vector<int>& faceNodes = e == 0 ? m_F0_Nodes : (e == 1 ? m_F1_Nodes : m_F2_Nodes);
       for (int d = 0; d < numFaceNodes; ++d)
       {
         int inIdxA = c * numCellNodes + faceNodes[d]; // d.o.f. on this edge itself
@@ -238,7 +243,7 @@ void advection_2d<T, M>::numerical_fluxes(ConstItr cbegin, T t) const
         }
         else
         {
-          std::vector<int>& nbFaceNodes = allFaceNodes[nbLocalEdgeIdx];
+          const std::vector<int>& nbFaceNodes = nbLocalEdgeIdx == 0 ? m_F0_Nodes : (nbLocalEdgeIdx == 1 ? m_F1_Nodes : m_F2_Nodes);
 
           // flip direction to match neighbor's edge d.o.f.'s with this edge's !
           // THIS ONLY WORKS FOR 2D--FOR 3D WE MAY NEED TO GEOMETRICALLY MATCH D.O.F.'S !
@@ -261,7 +266,7 @@ void advection_2d<T, M>::numerical_fluxes(ConstItr cbegin, T t) const
         point_type n = cell.outward_normal(e);
         T U = (n.x() + n.y()) >= dgc::const_val<T, 0> ? aU : bU;
         // numerical flux needs to be projected to the outward unit normal of the edge!
-        m_numericalFluxes[c * 3 * numFaceNodes + e * numFaceNodes + d] = U * n.x() + U * n.y();
+        m_numericalFluxes[c * 3 * numFaceNodes + e * numFaceNodes + d] = U * (n.x() + n.y());
       }
     }
   }
@@ -301,7 +306,7 @@ void advection_2d<T, M>::operator()(ConstItr in_cbegin, std::size_t size, T t, I
       }
     }
 
-    m_L.gemv(-dgc::const_val<T, 1> / mapping::J(cell), mFl.cbegin(), dgc::const_val<T, 0>, sU.begin());
+    m_L.gemv(- dgc::const_val<T, 1> / mapping::J(cell), mFl.cbegin(), dgc::const_val<T, 0>, sU.begin());
 
     // assemble the final results
     for (int j = 0; j < numCellNodes; ++j)
@@ -372,10 +377,6 @@ int advection_2d<T, M>::fill_boundary_nodes(OutputIterator1 it1, OutputIterator2
   using point_type = dgc::point_2d<T>;
   std::vector<std::pair<T, T>> pos;
   refElem.node_positions(m_order, std::back_inserter(pos));
-  std::vector<int> allFaceNodes[3];
-  refElem.face_nodes(m_order, 0, std::back_inserter(allFaceNodes[0]));
-  refElem.face_nodes(m_order, 1, std::back_inserter(allFaceNodes[1]));
-  refElem.face_nodes(m_order, 2, std::back_inserter(allFaceNodes[2]));
 
   bool isBoundary;
   int nbCell, nbLocalEdgeIdx;
@@ -388,7 +389,7 @@ int advection_2d<T, M>::fill_boundary_nodes(OutputIterator1 it1, OutputIterator2
 
       if (isBoundary)
       {
-        std::vector<int>& faceNodes = allFaceNodes[e];
+        const std::vector<int>& faceNodes = e == 0 ? m_F0_Nodes : (e == 1 ? m_F1_Nodes : m_F2_Nodes);
         for (int i = 0; i < numFaceNodes; ++i)
         {
           point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[i]].first, pos[faceNodes[i]].second));
@@ -402,6 +403,21 @@ int advection_2d<T, M>::fill_boundary_nodes(OutputIterator1 it1, OutputIterator2
   }
 
   return numBoundaryNodes;
+}
+
+template<typename T, typename M>  template<typename OutputIterator1, typename OutputIterator2>
+void advection_2d<T, M>::fill_outward_normals(OutputIterator1 it1, OutputIterator2 it2) const
+{
+  for (int c = 0; c < m_mesh->num_cells(); ++c)
+  {
+    const auto cell = m_mesh->get_cell(c);
+    for (int e = 0; e < 3; ++e)
+    {
+      dgc::point_2d<T> n = cell.outward_normal(e);
+      *it1++ = n.x();
+      *it2++ = n.y();
+    }
+  }
 }
 
 #endif

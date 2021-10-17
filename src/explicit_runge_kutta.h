@@ -30,65 +30,6 @@
 
 BEGIN_NAMESPACE
 
-/*
-// Vector type could be composite type, i.e., containing multiple vectors and it must support
-// add(double, const Vector& in, Vector& out), add(const Vector& in), and scale(double s);
-// DiscreteOp type must overload operator() (const Vector& in, double, Vector& out); and
-// Limiter type must overload operator() (Vector& inOut)
-template <typename Vector, typename DiscreteOp, typename Limiter>
-void optimal_rk2_with_limiter(Vector& inout, double t, double dt, DiscreteOp op, Limiter limiter, Vector& wk0, Vector& wk1)
-{
-	op(inout, t, wk0);
-	inout.add(dt, wk0, wk1);
-	limiter(wk1);
-
-	op(wk1, t + dt, wk0);
-	wk0.scale(dt);
-	wk1.add(wk0);
-	inout.add(wk1);
-	inout.scale(0.5);
-	limiter(inout);
-}
-
-// Vector type could be composite type, i.e., containing multiple vectors, and it must support
-// add(double, const Vector& in, Vector& out), add(const Vector& in), and scale(double s);
-// DiscreteOp type must overload operator() (const Vector& in, double, Vector& out); and
-// Limiter type must overload operator() (Vector& inOut)
-template <typename Vector, typename DiscreteOp, typename Limiter>
-void optimal_rk3_with_limiter(Vector& inout, double t, double dt, DiscreteOp op, Limiter limiter, Vector& wk0, Vector& wk1, Vector& wk2)
-{
-	op(inout, t, wk0);
-	inout.add(dt, wk0, wk1);
-	limiter(wk1);
-
-	op(wk1, t + dt, wk0);
-	wk1.add(dt, wk0, wk2);
-	wk2.scale(1.0 / 3.0);
-	wk2.add(inout);
-	wk2.scale(0.75);
-	limiter(wk2);
-
-	op(wk2, t + 0.5 * dt, wk0);
-	wk2.add(dt, wk0, wk1);
-	wk1.scale(2.0);
-	inout.add(wk1);
-	inout.scale(1.0 / 3.0);
-	limiter(inout);
-}
-
-// forward euler
-// Vector type could be composite type, i.e., containing multiple vectors and it must support
-// add(const Vector& in), and scale(double s); and DiscreteOp type must overload operator()
-// (const Vector& in, double, Vector& out)
-template <typename Vector, typename DiscreteOp>
-void fe1(Vector& inout, double t, double dt, DiscreteOp op, Vector& wk)
-{
-	op(inout, t, wk);
-	wk.scale(dt);
-	inout.add(wk);
-}
-*/
-
 template <typename ConstItr, typename T, typename Itr>
 void axpy_n(T a, ConstItr x_cbegin, std::size_t x_size, ConstItr y_cbegin, Itr out_begin)
 {
@@ -101,7 +42,7 @@ void axpy_n(T a, ConstItr x_cbegin, std::size_t x_size, ConstItr y_cbegin, Itr o
 
 // fourth-order explicit Runge-Kutta method for scalar variable
 template <typename Itr, typename T, typename DiscreteOp, typename Axpy>
-void rk4(Itr inout, std::size_t size, T t, T dt, const DiscreteOp& op, Axpy axpy, Itr wk0, Itr wk1, Itr wk2, Itr wk3, Itr wk4)
+void rk4(Itr inout, std::size_t size, T t, T dt, const DiscreteOp& op, const Axpy& axpy, Itr wk0, Itr wk1, Itr wk2, Itr wk3, Itr wk4)
 {
   op(inout, size, t, wk1);
 

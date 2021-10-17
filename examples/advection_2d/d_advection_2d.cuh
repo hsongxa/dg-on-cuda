@@ -26,30 +26,38 @@
 #define D_ADVECTION_2D_CUH
 
 #include <cstddef>
+#include <cmath>
 #include <math.h>
 
 #include "gemv.cuh"
 
-#define MAX_NUM_NODES 28
+#define MAX_NUM_CELL_NODES 28
 #define MAX_NUM_FACE_NODES 7
 
 // device code which is a simplified version of the advection_2d class on host
 template<typename T, typename I>
 struct d_advection_2d
 {
-  T* m_Dr;
-  T* m_Ds;
-  T* m_L;
+  const T* m_Dr;
+  const T* m_Ds;
+  const T* m_L;
+
+  // indices of nodes on the three faces of the reference element
+  // these arrays and the matrices above are stored in the constant memory
+  // as they do not change
+  const int* m_Face_0_Nodes;
+  const int* m_Face_1_Nodes;
+  const int* m_Face_2_Nodes;
 
   // mapping of reference element to physical elements
-  T* m_Inv_Jacobian;
-  T* m_J;
-  T* m_Face_J;
+  const T* m_Inv_Jacobian;
+  const T* m_J;
+  const T* m_Face_J;
 
   // cell interfaces (mapping of [cell, face] to [nbCell, nbFace])
   // in the case of a boundary face, the mapping becomes [cell, face] to [cell (self), offset-to-m_Boundary_Nodes_X(Y)]
-  I* m_Interfaces_Cell;
-  I* m_Interfaces_Face;
+  const I* m_Interfaces_Cell;
+  const I* m_Interfaces_Face;
 
   // other data (those supplied by reference element) such as number of DOFs per element,
   // number of DOFs on each face, ..., etc., can be derived from the approximation order,
@@ -57,9 +65,11 @@ struct d_advection_2d
   int m_Order;
   I m_Num_Cells;
 
-  // boundary geometry
-  T* m_Boundary_Nodes_X;
-  T* m_Boundary_Nodes_Y;
+  // the only geometry information needed is outward normals of all faces and positions of boundary nodes
+  const T* m_Outward_Normals_X;
+  const T* m_Outward_Normals_Y;
+  const T* m_Boundary_Nodes_X;
+  const T* m_Boundary_Nodes_Y;
 
   // To conduct DG calculations, we need:
   //
@@ -68,7 +78,7 @@ struct d_advection_2d
   //                          => D & L matrices per variable;
   // 2. mapping of cell index => Jacobian matrix and J per cell and face J per face; 
   // 3. mapping of cell face to cell face;
-  // 4. geometry information of boundary faces if boundary conditions depend on it.
+  // 4. geometry information of faces (outward normals) and boundary nodes if boundary conditions depend on it.
   //
   // For triangle mesh and problems with one scalar variable of fixed approximation order,
   // the above data are sufficient.
@@ -84,41 +94,64 @@ struct d_advection_2d
   // process the specified cell 
   __device__ void operator()(std::size_t cid, const T* in, std::size_t size, T t, T* out) const
   {
-    // coalesced memory access requires a certain layout of entries of "in" and "out"
-/*
-    // NOTE: mapping #0 and #1
-    dgc::gemv(m_D, false, m_NumRows, m_NumRows, -s_waveSpeed, in + cid, m_NumCells, (T)(0.0L), out + cid, m_NumCells);
+    // NOTE: never dynamically allocate arrays on device - sooooo slow
+    T D[MAX_NUM_CELL_NODES * MAX_NUM_CELL_NODES]; // matrix to apply in the physical coordinate system
+    T mFl[3 * MAX_NUM_FACE_NODES]; // mapped numerical fluxes
+    T sU[MAX_NUM_CELL_NODES];  // output of the surface integration
+    for (int i = 0; i < MAX_NUM_CELL_NODES; ++i) sU[i] = 0; // MUST INITIALIZE THIS MEMORY!
 
-    // lifting starts from calculating numerical fluxes
-    T aL = cid == 0 ? bc_dirichlet(t) : *(in + m_NumCells * (m_NumRows - 1) + cid - 1);
-    T aR = *(in + cid);
-    T bL = *(in + m_NumCells * (m_NumRows - 1) + cid);
-    T bR = cid == m_NumCells - 1 ? bL : *(in + cid + 1);
+    // NOTE: hard-coded logic here - this is the reference element stuff on CPU
+    int numCellNodes = (m_Order + 1) * (m_Order + 2) / 2;
+    int numFaceNodes = m_Order + 1;
 
-    // IMPORTANT LEARNING: on device, dynamic memory allocation on heap is many times (>20) slower than static allocation!
-    // We could remove the hard-coded size of the static array allocation - for 1D problems what only matters is the first
-    // and last entries so we could just allocate two and simplify the following gemv calculation by directly calculating
-    // the results of these two entries. But we do not pursue it here as this won't carry to 2D and 3D problems. The general
-    // solution is to define a maximum approximation order at compile time and allocate according to that maximum here.
-    T inVec[MAX_APPROX_ORDER + 1]; // = (T*)malloc(m_NumRows * sizeof(T));
-    T outVec[MAX_APPROX_ORDER + 1];// = (T*)malloc(m_NumRows * sizeof(T));
-    for (int i = 0; i < m_NumRows; ++i)
+    // volume integration
+    T invJ0 = m_Inv_Jacobian[cid * 4];
+    T invJ1 = m_Inv_Jacobian[cid * 4 + 2];
+    for(int i = 0; i < numCellNodes * numCellNodes; ++i)
+      D[i] = m_Dr[i] * invJ0 + m_Ds[i] * invJ1; 
+    // NOTE: coalesed memory access of "in"
+    dgc::gemv(D, false, numCellNodes, numCellNodes, (T)(1.0L), in + cid, m_Num_Cells, (T)(0.0L), out + cid, m_Num_Cells);
+
+    invJ0 = m_Inv_Jacobian[cid * 4 + 1];
+    invJ1 = m_Inv_Jacobian[cid * 4 + 3];
+    for(int i = 0; i < numCellNodes * numCellNodes; ++i)
+      D[i] = m_Dr[i] * invJ0 + m_Ds[i] * invJ1; 
+    // NOTE: coalesed memory access of "in"
+    dgc::gemv(D, false, numCellNodes, numCellNodes, (T)(1.0L), in + cid, m_Num_Cells, (T)(1.0L), out + cid, m_Num_Cells);
+
+    // surface integration
+    for (int e = 0; e < 3; ++e)
     {
-      inVec[i] = (T)(0.0L);
-      outVec[i] = (T)(0.0L);
+      I faceIdx = 3 * cid + e;
+      I nbCell = m_Interfaces_Cell[faceIdx];
+      I nbFace = m_Interfaces_Face[faceIdx];
+
+      const int* faceNodes = e == 0 ? m_Face_0_Nodes : (e == 1 ? m_Face_1_Nodes : m_Face_2_Nodes);
+      const int* nbFaceNodes = nbCell == cid ? nullptr : 
+                               (nbFace == 0 ? m_Face_0_Nodes : (nbFace == 1 ? m_Face_1_Nodes : m_Face_2_Nodes));
+
+      for (int d = 0; d < numFaceNodes; ++d)
+      {
+        // NOTE: no more coalesed memory access pattern
+        T aU = in[faceNodes[d] * m_Num_Cells + cid];
+        T bU = nbCell == cid ?
+               // boundary face: nbFace is actually the offset to m_Boundary_Nodes_X/Y
+               std::sin((m_Boundary_Nodes_X[nbFace + d] + (T)(1.0L) - t) * M_PI) *
+               std::sin((m_Boundary_Nodes_Y[nbFace + d] + (T)(1.0L) - t) * M_PI) :
+               // interior face: flip direction to match with neighbors' d.o.f. - this only works for 2D!
+               in[nbFaceNodes[numFaceNodes - d - 1] * m_Num_Cells + nbCell];
+        T nX = m_Outward_Normals_X[faceIdx];
+        T nY = m_Outward_Normals_Y[faceIdx];
+        T U = (nX + nY >= (T)(0.0L)) ? aU : bU;
+        // numerical flux needs to be projected to the outward unit normal of the edge!
+        mFl[e * numFaceNodes + d] = U * (nX + nY) * m_Face_J[faceIdx];
+      }
     }
-    inVec[0] = numerical_flux(aL, aR) - s_waveSpeed * *(in + cid);
-    inVec[m_NumRows - 1] = s_waveSpeed * *(in + m_NumCells * (m_NumRows - 1) + cid) - numerical_flux(bL, bR);
+    dgc::gemv(m_L, false, numCellNodes, 3 * numFaceNodes, - (T)(1.0L) / m_J[cid], mFl, 1, (T)(0.0L), sU, 1);
 
-    // NOTE: mapping #0 and #1
-    dgc::gemv(m_L, false, m_NumRows, m_NumRows, (T)(1.0L), inVec, 1, (T)(1.0L), outVec, 1);
-
-    for (int j = 0; j < m_NumRows; ++j)
-      *(out + m_NumCells * j + cid) += outVec[j];
-*/
-    // IMPORTANT LEARNING: on device, dynamic memory allocation on heap is many times (>20) slower than static allocation!
-    //free(inVec);
-    //free(outVec);
+    // update the final results
+    for(int i = 0; i < numCellNodes; ++i)
+      out[i * m_Num_Cells + cid] += sU[i];
   }
 
   // in addition, also need to tell kernel how many cells in total
