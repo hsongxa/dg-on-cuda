@@ -49,6 +49,13 @@ double compute_error_norm(double* ref_v, double* v, int size)
   return err / size;
 }
 
+int has_nan(double* v, int size)
+{
+  for(int i = 0; i < size; ++i)
+    if (std::isnan(v[i])) return i;
+  return -1;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Program main
 ////////////////////////////////////////////////////////////////////////////////
@@ -60,7 +67,7 @@ int main(int argc, char **argv) {
   int numCells = meshPtr->num_cells();
   int order = 1;
 #if !defined USE_CPU_ONLY
-  int blockSize = 1024;
+  int blockSize = 512;
 #endif
   if (argc > 1)
   {
@@ -85,14 +92,20 @@ int main(int argc, char **argv) {
   std::vector<double> boundary_node_Ys;
   int num_boundary_nodes = op.fill_boundary_nodes(std::back_inserter(boundary_node_Xs), std::back_inserter(boundary_node_Ys));
 
-  double *d_inv_jacobians, *d_Js, *d_face_Js, *d_boundary_node_Xs, *d_boundary_node_Ys;
+  std::vector<double> outward_normal_Xs;
+  std::vector<double> outward_normal_Ys;
+  op.fill_outward_normals(std::back_inserter(outward_normal_Xs), std::back_inserter(outward_normal_Ys));
+
+  double *d_inv_jacobians, *d_Js, *d_face_Js, *d_boundary_node_Xs, *d_boundary_node_Ys, *d_outward_normal_Xs, *d_outward_normal_Ys;
   int *d_interface_cells, *d_interface_faces;
   d_advection_2d<double, int>* dOp = create_device_object(numCells, order, op.m_Dr.data(), op.m_Ds.data(), op.m_L.data(),
+                                                          op.m_F0_Nodes.data(), op.m_F1_Nodes.data(), op.m_F2_Nodes.data(),
                                                           inv_jacobians.data(), Js.data(), face_Js.data(),
                                                           interface_cells.data(), interface_faces.data(), num_boundary_nodes,
-                                                          boundary_node_Xs.data(), boundary_node_Ys.data(),
-                                                          &d_inv_jacobians, &d_Js, &d_face_Js, &d_interface_cells, &d_interface_faces,
-                                                          &d_boundary_node_Xs, &d_boundary_node_Ys);
+                                                          boundary_node_Xs.data(), boundary_node_Ys.data(), outward_normal_Xs.data(),
+                                                          outward_normal_Ys.data(), &d_inv_jacobians, &d_Js, &d_face_Js,
+                                                          &d_interface_cells, &d_interface_faces, &d_boundary_node_Xs,
+                                                          &d_boundary_node_Ys, &d_outward_normal_Xs, &d_outward_normal_Ys);
 #endif
 
   // DOF positions and initial conditions
@@ -143,7 +156,7 @@ int main(int argc, char **argv) {
 
   // output the last error
   double errNorm = compute_error_norm(ref_v, v, numDOFs);
-  std::cout << "t = " << t << ", error norm = " << errNorm << std::endl;
+  std::cout << "T = " << t << ", error norm = " << errNorm << std::endl;
   std::cout << "time used: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms" << std::endl;
 
   // output to visualize
@@ -167,7 +180,7 @@ int main(int argc, char **argv) {
   cudaFree(ref_v);
 #if !defined USE_CPU_ONLY
   destroy_device_object(dOp, d_inv_jacobians, d_Js, d_face_Js, d_interface_cells, d_interface_faces,
-                        d_boundary_node_Xs, d_boundary_node_Ys);
+                        d_boundary_node_Xs, d_boundary_node_Ys, d_outward_normal_Xs, d_outward_normal_Ys);
 #endif
 
   return 0;
