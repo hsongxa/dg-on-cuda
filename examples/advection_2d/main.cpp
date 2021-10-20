@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
   int numCells = meshPtr->num_cells();
   int order = 1;
 #if !defined USE_CPU_ONLY
-  int blockSize = 512;
+  int blockSize = 1024;
 #endif
   if (argc > 1)
   {
