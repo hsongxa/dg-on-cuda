@@ -83,22 +83,12 @@ struct d_advection_2d
   // For triangle mesh and problems with one scalar variable of fixed approximation order,
   // the above data are sufficient.
 
-  // boundary conditions
-  __device__ T bc_dirichlet(T t) const
-  { return  0; }
-
-  // numerical flux
-  __device__ T numerical_flux(T a, T b) const 
-  { return 0; }
-
   // process the specified cell 
   __device__ void operator()(std::size_t cid, const T* in, std::size_t size, T t, T* out) const
   {
     // NOTE: never dynamically allocate arrays on device - sooooo slow
     T D[MAX_NUM_CELL_NODES * MAX_NUM_CELL_NODES]; // matrix to apply in the physical coordinate system
     T mFl[3 * MAX_NUM_FACE_NODES]; // mapped numerical fluxes
-    T sU[MAX_NUM_CELL_NODES];  // output of the surface integration
-    for (int i = 0; i < MAX_NUM_CELL_NODES; ++i) sU[i] = 0; // MUST INITIALIZE THIS MEMORY!
 
     // NOTE: hard-coded logic here - this is the reference element stuff on CPU
     int numCellNodes = (m_Order + 1) * (m_Order + 2) / 2;
@@ -147,11 +137,7 @@ struct d_advection_2d
         mFl[e * numFaceNodes + d] = U * (nX + nY) * m_Face_J[faceIdx];
       }
     }
-    dgc::gemv(m_L, false, numCellNodes, 3 * numFaceNodes, - (T)(1.0L) / m_J[cid], mFl, 1, (T)(0.0L), sU, 1);
-
-    // update the final results
-    for(int i = 0; i < numCellNodes; ++i)
-      out[i * m_Num_Cells + cid] += sU[i];
+    dgc::gemv(m_L, false, numCellNodes, 3 * numFaceNodes, - (T)(1.0L) / m_J[cid], mFl, 1, (T)(1.0L), out + cid, m_Num_Cells);
   }
 
   // in addition, also need to tell kernel how many cells in total
