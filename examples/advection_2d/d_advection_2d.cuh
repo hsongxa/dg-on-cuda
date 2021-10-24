@@ -29,59 +29,17 @@
 #include <cmath>
 #include <math.h>
 
+#include "d_simple_discretization_2d.cuh"
 #include "gemv.cuh"
 
-#define MAX_NUM_CELL_NODES 28
-#define MAX_NUM_FACE_NODES 7
 
-// device code which is a simplified version of the advection_2d class on host
+// device code - a simplified version of the advection_2d class on host
 template<typename T, typename I>
-struct d_advection_2d
+struct d_advection_2d : public dgc::d_simple_discretization_2d<T, I>
 {
-  const T* m_Dr;
-  const T* m_Ds;
-  const T* m_L;
-
-  // indices of nodes on the three faces of the reference element
-  // these arrays and the matrices above are stored in the constant memory
-  // as they do not change
-  const int* m_Face_0_Nodes;
-  const int* m_Face_1_Nodes;
-  const int* m_Face_2_Nodes;
-
-  // mapping of reference element to physical elements
-  const T* m_Inv_Jacobian;
-  const T* m_J;
-  const T* m_Face_J;
-
-  // cell interfaces (mapping of [cell, face] to [nbCell, nbFace])
-  // in the case of a boundary face, the mapping becomes [cell, face] to [cell (self), offset-to-m_Boundary_Nodes_X(Y)]
-  const I* m_Interfaces_Cell;
-  const I* m_Interfaces_Face;
-
-  // other data (those supplied by reference element) such as number of DOFs per element,
-  // number of DOFs on each face, ..., etc., can be derived from the approximation order,
-  // assuming single element type of triangle
-  int m_Order;
-  I m_Num_Cells;
-
-  // the only geometry information needed is outward normals of all faces and positions of boundary nodes
-  const T* m_Outward_Normals_X;
-  const T* m_Outward_Normals_Y;
-  const T* m_Boundary_Nodes_X;
-  const T* m_Boundary_Nodes_Y;
-
-  // To conduct DG calculations, we need:
-  //
-  // 0. mapping of cell index => starting positions to the respective variable vectors
-  // 1. mapping of cell index => reference element (shape, approximation order) per vairable
-  //                          => D & L matrices per variable;
-  // 2. mapping of cell index => Jacobian matrix and J per cell and face J per face; 
-  // 3. mapping of cell face to cell face;
-  // 4. geometry information of faces (outward normals) and boundary nodes if boundary conditions depend on it.
-  //
-  // For triangle mesh and problems with one scalar variable of fixed approximation order,
-  // the above data are sufficient.
+  const T* Dr;
+  const T* Ds;
+  const T* L;
 
   // process the specified cell 
   __device__ void operator()(std::size_t cid, const T* in, std::size_t size, T t, T* out) const
@@ -91,57 +49,57 @@ struct d_advection_2d
     T mFl[3 * MAX_NUM_FACE_NODES]; // mapped numerical fluxes
 
     // NOTE: hard-coded logic here - this is the reference element stuff on CPU
-    int numCellNodes = (m_Order + 1) * (m_Order + 2) / 2;
-    int numFaceNodes = m_Order + 1;
+    int numCellNodes = (this->Order + 1) * (this->Order + 2) / 2;
+    int numFaceNodes = this->Order + 1;
 
     // volume integration
-    T invJ0 = m_Inv_Jacobian[cid * 4];
-    T invJ1 = m_Inv_Jacobian[cid * 4 + 2];
+    T invJ0 = this->Inv_Jacobian[cid * 4];
+    T invJ1 = this->Inv_Jacobian[cid * 4 + 2];
     for(int i = 0; i < numCellNodes * numCellNodes; ++i)
-      D[i] = m_Dr[i] * invJ0 + m_Ds[i] * invJ1; 
+      D[i] = Dr[i] * invJ0 + Ds[i] * invJ1; 
     // NOTE: coalesed memory access of "in"
-    dgc::gemv(D, false, numCellNodes, numCellNodes, (T)(1.0L), in + cid, m_Num_Cells, (T)(0.0L), out + cid, m_Num_Cells);
+    dgc::gemv(D, false, numCellNodes, numCellNodes, (T)(1.0L), in + cid, this->NumCells, (T)(0.0L), out + cid, this->NumCells);
 
-    invJ0 = m_Inv_Jacobian[cid * 4 + 1];
-    invJ1 = m_Inv_Jacobian[cid * 4 + 3];
+    invJ0 = this->Inv_Jacobian[cid * 4 + 1];
+    invJ1 = this->Inv_Jacobian[cid * 4 + 3];
     for(int i = 0; i < numCellNodes * numCellNodes; ++i)
-      D[i] = m_Dr[i] * invJ0 + m_Ds[i] * invJ1; 
+      D[i] = Dr[i] * invJ0 + Ds[i] * invJ1; 
     // NOTE: coalesed memory access of "in"
-    dgc::gemv(D, false, numCellNodes, numCellNodes, (T)(1.0L), in + cid, m_Num_Cells, (T)(1.0L), out + cid, m_Num_Cells);
+    dgc::gemv(D, false, numCellNodes, numCellNodes, (T)(1.0L), in + cid, this->NumCells, (T)(1.0L), out + cid, this->NumCells);
 
     // surface integration
     for (int e = 0; e < 3; ++e)
     {
       I faceIdx = 3 * cid + e;
-      I nbCell = m_Interfaces_Cell[faceIdx];
-      I nbFace = m_Interfaces_Face[faceIdx];
+      I nbCell = this->Interfaces_Cell[faceIdx];
+      I nbFace = this->Interfaces_Face[faceIdx];
 
-      const int* faceNodes = e == 0 ? m_Face_0_Nodes : (e == 1 ? m_Face_1_Nodes : m_Face_2_Nodes);
+      const int* faceNodes = e == 0 ? this->Face_0_Nodes : (e == 1 ? this->Face_1_Nodes : this->Face_2_Nodes);
       const int* nbFaceNodes = nbCell == cid ? nullptr : 
-                               (nbFace == 0 ? m_Face_0_Nodes : (nbFace == 1 ? m_Face_1_Nodes : m_Face_2_Nodes));
+                               (nbFace == 0 ? this->Face_0_Nodes : (nbFace == 1 ? this->Face_1_Nodes : this->Face_2_Nodes));
 
       for (int d = 0; d < numFaceNodes; ++d)
       {
         // NOTE: no more coalesed memory access pattern
-        T aU = in[faceNodes[d] * m_Num_Cells + cid];
+        T aU = in[faceNodes[d] * this->NumCells + cid];
         T bU = nbCell == cid ?
                // boundary face: nbFace is actually the offset to m_Boundary_Nodes_X/Y
-               std::sin((m_Boundary_Nodes_X[nbFace + d] + (T)(1.0L) - t) * M_PI) *
-               std::sin((m_Boundary_Nodes_Y[nbFace + d] + (T)(1.0L) - t) * M_PI) :
+               std::sin((this->Boundary_Nodes_X[nbFace + d] + (T)(1.0L) - t) * M_PI) *
+               std::sin((this->Boundary_Nodes_Y[nbFace + d] + (T)(1.0L) - t) * M_PI) :
                // interior face: flip direction to match with neighbors' d.o.f. - this only works for 2D!
-               in[nbFaceNodes[numFaceNodes - d - 1] * m_Num_Cells + nbCell];
-        T nX = m_Outward_Normals_X[faceIdx];
-        T nY = m_Outward_Normals_Y[faceIdx];
+               in[nbFaceNodes[numFaceNodes - d - 1] * this->NumCells + nbCell];
+        T nX = this->Outward_Normals_X[faceIdx];
+        T nY = this->Outward_Normals_Y[faceIdx];
         T U = (nX + nY >= (T)(0.0L)) ? aU : bU;
         // numerical flux needs to be projected to the outward unit normal of the edge!
-        mFl[e * numFaceNodes + d] = U * (nX + nY) * m_Face_J[faceIdx];
+        mFl[e * numFaceNodes + d] = U * (nX + nY) * this->Face_J[faceIdx];
       }
     }
-    dgc::gemv(m_L, false, numCellNodes, 3 * numFaceNodes, - (T)(1.0L) / m_J[cid], mFl, 1, (T)(1.0L), out + cid, m_Num_Cells);
+    dgc::gemv(L, false, numCellNodes, 3 * numFaceNodes, - (T)(1.0L) / this->J[cid], mFl, 1, (T)(1.0L), out + cid, this->NumCells);
   }
 
   // in addition, also need to tell kernel how many cells in total
-  __device__ I num_cells() const { return m_Num_Cells; }
+  __device__ I num_cells() const { return this->NumCells; }
 };
 
 #endif

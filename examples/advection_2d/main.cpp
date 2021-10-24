@@ -97,13 +97,14 @@ int main(int argc, char **argv) {
   op.fill_outward_normals(std::back_inserter(outward_normal_Xs), std::back_inserter(outward_normal_Ys));
 
   double *d_inv_jacobians, *d_Js, *d_face_Js, *d_boundary_node_Xs, *d_boundary_node_Ys, *d_outward_normal_Xs, *d_outward_normal_Ys;
-  int *d_interface_cells, *d_interface_faces;
+  int *d_face0_nodes, *d_face1_nodes, *d_face2_nodes, *d_interface_cells, *d_interface_faces;
   d_advection_2d<double, int>* dOp = create_device_object(numCells, order, op.m_Dr.data(), op.m_Ds.data(), op.m_L.data(),
                                                           op.m_F0_Nodes.data(), op.m_F1_Nodes.data(), op.m_F2_Nodes.data(),
                                                           inv_jacobians.data(), Js.data(), face_Js.data(),
                                                           interface_cells.data(), interface_faces.data(), num_boundary_nodes,
-                                                          boundary_node_Xs.data(), boundary_node_Ys.data(), outward_normal_Xs.data(),
-                                                          outward_normal_Ys.data(), &d_inv_jacobians, &d_Js, &d_face_Js,
+                                                          boundary_node_Xs.data(), boundary_node_Ys.data(),
+                                                          outward_normal_Xs.data(), outward_normal_Ys.data(), &d_face0_nodes,
+                                                          &d_face1_nodes, &d_face2_nodes, &d_inv_jacobians, &d_Js, &d_face_Js,
                                                           &d_interface_cells, &d_interface_faces, &d_boundary_node_Xs,
                                                           &d_boundary_node_Ys, &d_outward_normal_Xs, &d_outward_normal_Ys);
 #endif
@@ -179,8 +180,9 @@ int main(int argc, char **argv) {
   cudaFree(v5);
   cudaFree(ref_v);
 #if !defined USE_CPU_ONLY
-  destroy_device_object(dOp, d_inv_jacobians, d_Js, d_face_Js, d_interface_cells, d_interface_faces,
-                        d_boundary_node_Xs, d_boundary_node_Ys, d_outward_normal_Xs, d_outward_normal_Ys);
+  destroy_device_object(dOp, d_face0_nodes, d_face1_nodes, d_face2_nodes, d_inv_jacobians, d_Js, d_face_Js,
+                        d_interface_cells, d_interface_faces, d_boundary_node_Xs, d_boundary_node_Ys,
+                        d_outward_normal_Xs, d_outward_normal_Ys);
 #endif
 
   return 0;
