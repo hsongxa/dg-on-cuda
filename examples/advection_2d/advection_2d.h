@@ -110,13 +110,18 @@ advection_2d<T, M>::advection_2d(const M& mesh, int order)
   m_Dr = v * vGrad.first.transpose() * m;
   m_Ds = v * vGrad.second.transpose() * m;
 
+  // face node information
+  refElem.face_nodes(m_order, 0, std::back_inserter(m_F0_Nodes));
+  refElem.face_nodes(m_order, 1, std::back_inserter(m_F1_Nodes));
+  refElem.face_nodes(m_order, 2, std::back_inserter(m_F2_Nodes));
+
   // surface integration matrix for triangle element
   auto numFaceNodes = refElem.num_face_nodes(m_order);
   dense_matrix mE(refElem.num_nodes(m_order), 3 * numFaceNodes, dgc::const_val<T, 0>);
   for (int e = 0; e < 3; ++e)
   {
-    std::vector<int> eN;
-    refElem.face_nodes(m_order, e, std::back_inserter(eN));
+    const std::vector<int>& eN = e == 0 ? m_F0_Nodes : (e == 1 ? m_F1_Nodes : m_F2_Nodes);
+
     dense_matrix eV = refElem.face_vandermonde_matrix(m_order, e);
     dense_matrix eM = eV * eV.transpose();
     eM = eM.inverse();
@@ -125,11 +130,6 @@ advection_2d<T, M>::advection_2d(const M& mesh, int order)
         mE(eN[row], e * numFaceNodes + col) = eM(row, col);
   }
   m_L = mInv * mE;
-
-  // face node information
-  refElem.face_nodes(m_order, 0, std::back_inserter(m_F0_Nodes));
-  refElem.face_nodes(m_order, 1, std::back_inserter(m_F1_Nodes));
-  refElem.face_nodes(m_order, 2, std::back_inserter(m_F2_Nodes));
 
   // populate mapping
   m_invJacobians.resize(m_mesh->num_cells() * 4);
@@ -282,20 +282,18 @@ void advection_2d<T, M>::operator()(ConstItr in_cbegin, std::size_t size, T t, I
   int numFaceNodes = refElem.num_face_nodes(m_order);
 
   std::vector<T> mFl(3 * numFaceNodes); // surface-mapped numerical fluxes
-  std::vector<T> vUx(numCellNodes), vUy(numCellNodes); // volume integrations
-  std::vector<T> sU(numCellNodes); // surface integrations
 
   for (int c = 0; c < m_mesh->num_cells(); ++c)
   {
-    const auto cell = m_mesh->get_cell(c);
-
     dense_matrix Dx = m_Dr * m_invJacobians[c * 4] + m_Ds * m_invJacobians[c * 4 + 2];
     dense_matrix Dy = m_Dr * m_invJacobians[c * 4 + 1] + m_Ds * m_invJacobians[c * 4 + 3];
 
-    Dx.gemv(dgc::const_val<T, 1>, in_cbegin + (c * numCellNodes), dgc::const_val<T, 0>, vUx.begin());
-    Dy.gemv(dgc::const_val<T, 1>, in_cbegin + (c * numCellNodes), dgc::const_val<T, 0>, vUy.begin());
+    int offset = c * numCellNodes;
+    Dx.gemv(dgc::const_val<T, 1>, in_cbegin + offset, dgc::const_val<T, 0>, out_begin + offset);
+    Dy.gemv(dgc::const_val<T, 1>, in_cbegin + offset, dgc::const_val<T, 1>, out_begin + offset);
 
     // fetch numerical fluxes and apply face mapping
+    const auto cell = m_mesh->get_cell(c);
     for (int e = 0; e < 3; ++e)
     {
       T faceJ = mapping::face_J(cell, e);
@@ -306,11 +304,7 @@ void advection_2d<T, M>::operator()(ConstItr in_cbegin, std::size_t size, T t, I
       }
     }
 
-    m_L.gemv(- dgc::const_val<T, 1> / mapping::J(cell), mFl.cbegin(), dgc::const_val<T, 0>, sU.begin());
-
-    // assemble the final results
-    for (int j = 0; j < numCellNodes; ++j)
-      *(out_begin + (c * numCellNodes + j)) = vUx[j] + vUy[j] + sU[j];
+    m_L.gemv(- dgc::const_val<T, 1> / mapping::J(cell), mFl.cbegin(), dgc::const_val<T, 1>, out_begin + offset);
   }
 }
 

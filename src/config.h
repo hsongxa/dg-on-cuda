@@ -26,7 +26,7 @@
 #define CONFIG_H
 
 // uncomment this line to run the code on CPU only
-//#define USE_CPU_ONLY
+#define USE_CPU_ONLY
 
 #define BEGIN_NAMESPACE namespace dgc {
 #define END_NAMESPACE }

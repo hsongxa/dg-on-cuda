@@ -31,6 +31,7 @@
 #include <cuda_runtime.h>
 
 #include "advection_1d.h"
+#include "axpy.h"
 #include "explicit_runge_kutta.h"
 #if !defined USE_CPU_ONLY
 #include "d_advection_1d.cuh"
@@ -102,7 +103,7 @@ int main(int argc, char **argv) {
   for (int i = 0; i < totalTSs; ++i)
   {
 #if defined USE_CPU_ONLY
-    dgc::rk4(v, numDOFs, t, dt, op, &dgc::axpy_n<const double*, double, double*>, v1, v2, v3, v4, v5);
+    dgc::rk4(v, numDOFs, t, dt, op, &dgc::axpy_n<double, const double*, double*>, v1, v2, v3, v4, v5);
 #else
     rk4_on_device(blockDim, blockSize, v, numDOFs, t, dt, dOp, v1, v2, v3, v4, v5);
     cudaDeviceSynchronize();
