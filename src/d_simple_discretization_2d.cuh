@@ -36,8 +36,8 @@ BEGIN_NAMESPACE
 #define MAX_NUM_CELL_NODES 28
 #define MAX_NUM_FACE_NODES 7
 
-// Simple discretization on device - "simple" means single cell shape (i.e., triangle),
-// same approximation order across all cells, and no adaptation (refinement or coarsening).
+// Simple discretization on device - "simple" means conformal, single cell shape (i.e.,
+// triangle) mesh with same approximation order across all cells, and no adaptation.
 // This class is intended to be the base class of concrete discrete-operators on device.
 template<typename F, typename I>
 struct d_simple_discretization_2d
@@ -73,11 +73,13 @@ struct d_simple_discretization_2d
   const F* Face_J;
 
   // cell interfaces (mapping of [cell, face] to [nbCell, nbFace])
-  // in the case of a boundary face, the mapping becomes [cell, face] to [cell (self), offset-to-Boundary_Nodes_X(Y)]
+  // in the case of a boundary face, the mapping becomes
+  // [cell, face] to [cell (self), offset-to-Boundary_Nodes_X(Y)]
   const I* Interfaces_Cell;
   const I* Interfaces_Face;
 
-  // the only geometry information needed is outward normals of all faces and positions of boundary nodes
+  // the only geometry information needed is outward normals of all
+  // faces and positions of boundary nodes
   const F* Outward_Normals_X;
   const F* Outward_Normals_Y;
   const F* Boundary_Nodes_X;

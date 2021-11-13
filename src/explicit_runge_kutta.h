@@ -26,21 +26,10 @@
 #define EXPLICIT_RUNGE_KUTTA_H
 
 #include <cstddef>
-#include <cassert>
 
 BEGIN_NAMESPACE
 
-template <typename ConstItr, typename T, typename Itr>
-void axpy_n(T a, ConstItr x_cbegin, std::size_t x_size, ConstItr y_cbegin, Itr out_begin)
-{
-  assert(x_cbegin != y_cbegin);
-  assert(out_begin != x_cbegin && out_begin != y_cbegin);
-
-  for (std::size_t i = 0; i < x_size; ++i)
-    *out_begin++ = a * (*x_cbegin++) + (*y_cbegin++);
-}
-
-// fourth-order explicit Runge-Kutta method for scalar variable
+// fourth-order explicit Runge-Kutta method
 template <typename Itr, typename T, typename DiscreteOp, typename Axpy>
 void rk4(Itr inout, std::size_t size, T t, T dt, const DiscreteOp& op, const Axpy& axpy, Itr wk0, Itr wk1, Itr wk2, Itr wk3, Itr wk4)
 {
