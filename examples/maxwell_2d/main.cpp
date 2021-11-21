@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
   double *d_inv_jacobians, *d_Js, *d_face_Js, *d_boundary_node_Xs, *d_boundary_node_Ys, *d_outward_normal_Xs, *d_outward_normal_Ys;
   int *d_face0_nodes, *d_face1_nodes, *d_face2_nodes, *d_interface_cells, *d_interface_faces;
   d_maxwell_2d<double, int>* dOp = create_device_object(numCells, order, op.m_Dr.data(), op.m_Ds.data(), op.m_L.data(),
-                                                          op.m_F0_Nodes.data(), op.m_F1_Nodes.data(), op.m_F2_Nodes.data(),
+                                                          op.F0_Nodes.data(), op.F1_Nodes.data(), op.F2_Nodes.data(),
                                                           inv_jacobians.data(), Js.data(), face_Js.data(),
                                                           interface_cells.data(), interface_faces.data(), num_boundary_nodes,
                                                           boundary_node_Xs.data(), boundary_node_Ys.data(),
