@@ -78,6 +78,7 @@ struct d_advection_2d : public dgc::d_simple_discretization_2d<T, I>
       const int* nbFaceNodes = nbCell == cid ? nullptr : 
                                (nbFace == 0 ? this->Face_0_Nodes : (nbFace == 1 ? this->Face_1_Nodes : this->Face_2_Nodes));
 
+      T faceJ = this->Face_J[faceIdx];
       for (int d = 0; d < numFaceNodes; ++d)
       {
         // NOTE: no more coalesed memory access pattern
@@ -92,7 +93,7 @@ struct d_advection_2d : public dgc::d_simple_discretization_2d<T, I>
         T nY = this->Outward_Normals_Y[faceIdx];
         T U = (nX + nY >= (T)(0.0L)) ? aU : bU;
         // numerical flux needs to be projected to the outward unit normal of the edge!
-        mFl[e * numFaceNodes + d] = U * (nX + nY) * this->Face_J[faceIdx];
+        mFl[e * numFaceNodes + d] = U * (nX + nY) * faceJ;
       }
     }
     dgc::gemv(L, false, numCellNodes, 3 * numFaceNodes, - (T)(1.0L) / this->J[cid], mFl, 1, (T)(1.0L), out + cid, this->NumCells);

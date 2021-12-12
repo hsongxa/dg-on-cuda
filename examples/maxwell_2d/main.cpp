@@ -29,6 +29,7 @@
 
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
+#include <thrust/fill.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <cuda_runtime.h>
 
@@ -81,37 +82,46 @@ int main(int argc, char **argv) {
 
   maxwell_2d<double, dgc::simple_triangular_mesh_2d<double, int>> op(*meshPtr, order);
 #if !defined USE_CPU_ONLY
-  std::vector<double> inv_jacobians;
-  std::vector<double> Js;
-  std::vector<double> face_Js;
+  thrust::host_vector<double> inv_jacobians;
+  thrust::host_vector<double> Js;
+  thrust::host_vector<double> face_Js;
   op.fill_cell_mappings(std::back_inserter(inv_jacobians), std::back_inserter(Js), std::back_inserter(face_Js));
 
-  std::vector<int> interface_cells;
-  std::vector<int> interface_faces;
+  thrust::host_vector<int> interface_cells;
+  thrust::host_vector<int> interface_faces;
   op.fill_cell_interfaces(std::back_inserter(interface_cells), std::back_inserter(interface_faces));
 
   // for this particular problem we do not need positions of boundary nodes - this is just for completeness
-  std::vector<double> boundary_node_Xs;
-  std::vector<double> boundary_node_Ys;
+  thrust::host_vector<double> boundary_node_Xs;
+  thrust::host_vector<double> boundary_node_Ys;
   int num_boundary_nodes = op.fill_boundary_nodes(std::back_inserter(boundary_node_Xs), std::back_inserter(boundary_node_Ys));
 
-  std::vector<double> outward_normal_Xs;
-  std::vector<double> outward_normal_Ys;
+  thrust::host_vector<double> outward_normal_Xs;
+  thrust::host_vector<double> outward_normal_Ys;
   op.fill_outward_normals(std::back_inserter(outward_normal_Xs), std::back_inserter(outward_normal_Ys));
 
-  double *d_inv_jacobians, *d_Js, *d_face_Js, *d_boundary_node_Xs, *d_boundary_node_Ys, *d_outward_normal_Xs, *d_outward_normal_Ys;
-  int *d_face0_nodes, *d_face1_nodes, *d_face2_nodes, *d_interface_cells, *d_interface_faces;
+  thrust::device_vector<int> d_face_0_nodes = op.F0_Nodes;
+  thrust::device_vector<int> d_face_1_nodes = op.F1_Nodes;
+  thrust::device_vector<int> d_face_2_nodes = op.F2_Nodes;
+  thrust::device_vector<double> d_inv_jacobians = inv_jacobians;
+  thrust::device_vector<double> d_Js = Js;
+  thrust::device_vector<double> d_face_Js = face_Js;
+  thrust::device_vector<int> d_interface_cells = interface_cells;
+  thrust::device_vector<int> d_interface_faces = interface_faces;
+  thrust::device_vector<double> d_boundary_node_Xs = boundary_node_Xs;
+  thrust::device_vector<double> d_boundary_node_Ys = boundary_node_Ys;
+  thrust::device_vector<double> d_outward_normal_Xs = outward_normal_Xs;
+  thrust::device_vector<double> d_outward_normal_Ys = outward_normal_Ys;
+
   d_maxwell_2d<double, int>* dOp = create_device_object(numCells, order, op.m_Dr.data(), op.m_Ds.data(), op.m_L.data(),
-                                                          op.F0_Nodes.data(), op.F1_Nodes.data(), op.F2_Nodes.data(),
-                                                          inv_jacobians.data(), Js.data(), face_Js.data(),
-                                                          interface_cells.data(), interface_faces.data(), num_boundary_nodes,
-                                                          boundary_node_Xs.data(), boundary_node_Ys.data(),
-                                                          outward_normal_Xs.data(), outward_normal_Ys.data(), &d_face0_nodes,
-                                                          &d_face1_nodes, &d_face2_nodes, &d_inv_jacobians, &d_Js, &d_face_Js,
-                                                          &d_interface_cells, &d_interface_faces, &d_boundary_node_Xs,
-                                                          &d_boundary_node_Ys, &d_outward_normal_Xs, &d_outward_normal_Ys);
+                                                        d_face_0_nodes, d_face_1_nodes, d_face_2_nodes,
+                                                        d_inv_jacobians, d_Js, d_face_Js,
+                                                        d_interface_cells, d_interface_faces, num_boundary_nodes,
+                                                        d_boundary_node_Xs, d_boundary_node_Ys,
+                                                        d_outward_normal_Xs, d_outward_normal_Ys);
 #endif
 
+  // "H" stands for host
   using HDblIterator = thrust::host_vector<double>::iterator;
   using HIteratorTuple = thrust::tuple<HDblIterator, HDblIterator, HDblIterator>;
   using HZipIterator = thrust::zip_iterator<HIteratorTuple>;
@@ -158,6 +168,31 @@ int main(int argc, char **argv) {
   double dt = (2.0 / 3.0) * (l / (double)order) * (l / (2.0 + std::sqrt(2.0))); // see p.199
 #if !defined USE_CPU_ONLY
   int blockDim = (numCells + blockSize - 1) / blockSize;
+
+  thrust::device_vector<double> d_Hx0 = Hx0;
+  thrust::device_vector<double> d_Hy0 = Hy0;
+  thrust::device_vector<double> d_Ez0 = Ez0;
+  auto d_it0 = thrust::make_zip_iterator(thrust::make_tuple(d_Hx0.begin(), d_Hy0.begin(), d_Ez0.begin()));
+  thrust::device_vector<double> d_Hx1 = Hx1;
+  thrust::device_vector<double> d_Hy1 = Hy1;
+  thrust::device_vector<double> d_Ez1 = Ez1;
+  auto d_it1 = thrust::make_zip_iterator(thrust::make_tuple(d_Hx1.begin(), d_Hy1.begin(), d_Ez1.begin()));
+  thrust::device_vector<double> d_Hx2 = Hx2;
+  thrust::device_vector<double> d_Hy2 = Hy2;
+  thrust::device_vector<double> d_Ez2 = Ez2;
+  auto d_it2 = thrust::make_zip_iterator(thrust::make_tuple(d_Hx2.begin(), d_Hy2.begin(), d_Ez2.begin()));
+  thrust::device_vector<double> d_Hx3 = Hx3;
+  thrust::device_vector<double> d_Hy3 = Hy3;
+  thrust::device_vector<double> d_Ez3 = Ez3;
+  auto d_it3 = thrust::make_zip_iterator(thrust::make_tuple(d_Hx3.begin(), d_Hy3.begin(), d_Ez3.begin()));
+  thrust::device_vector<double> d_Hx4 = Hx4;
+  thrust::device_vector<double> d_Hy4 = Hy4;
+  thrust::device_vector<double> d_Ez4 = Ez4;
+  auto d_it4 = thrust::make_zip_iterator(thrust::make_tuple(d_Hx4.begin(), d_Hy4.begin(), d_Ez4.begin()));
+  thrust::device_vector<double> d_Hx5 = Hx5;
+  thrust::device_vector<double> d_Hy5 = Hy5;
+  thrust::device_vector<double> d_Ez5 = Ez5;
+  auto d_it5 = thrust::make_zip_iterator(thrust::make_tuple(d_Hx5.begin(), d_Hy5.begin(), d_Ez5.begin()));
 #endif
 
   auto t0 = std::chrono::system_clock::now();
@@ -167,8 +202,8 @@ int main(int argc, char **argv) {
 #if defined USE_CPU_ONLY
     dgc::rk4(it0, numNodes, t, dt, op, &dgc::axpy_n<double, HZipIterator, HZipIterator>, it1, it2, it3, it4, it5);
 #else
-//    rk4_on_device(blockDim, blockSize, v, numNodes, t, dt, dOp, v1, v2, v3, v4, v5);
-//    cudaDeviceSynchronize();
+    rk4_on_device(blockDim, blockSize, d_it0, numNodes, t, dt, dOp, d_it1, d_it2, d_it3, d_it4, d_it5);
+    cudaDeviceSynchronize();
 #endif
     t += dt;
   }
@@ -178,14 +213,18 @@ int main(int argc, char **argv) {
   op.exact_solution(t, it_Ref);
 
   // output the last error
+#if !defined USE_CPU_ONLY
+  Hx0 = d_Hx0;
+  Hy0 = d_Hy0;
+  Ez0 = d_Ez0;
+  it0 = thrust::make_zip_iterator(thrust::make_tuple(Hx0.begin(), Hy0.begin(), Ez0.begin()));
+#endif
   double errNorm = compute_error_norm(it_Ref, it0, numNodes);
   std::cout << "T = " << t << ", error norm = " << errNorm << std::endl;
   std::cout << "time used: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms" << std::endl;
 
 #if !defined USE_CPU_ONLY
-  destroy_device_object(dOp, d_face0_nodes, d_face1_nodes, d_face2_nodes, d_inv_jacobians, d_Js, d_face_Js,
-                        d_interface_cells, d_interface_faces, d_boundary_node_Xs, d_boundary_node_Ys,
-                        d_outward_normal_Xs, d_outward_normal_Ys);
+  destroy_device_object(dOp);
 #endif
 
   return 0;
