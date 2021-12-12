@@ -45,7 +45,7 @@ struct tuple_axpy<T, 2> : public thrust::binary_function<thrust::tuple<T, T>, th
 { 
   tuple_axpy(T a) : m_a(a) {}
 
-  thrust::tuple<T, T> operator()(const thrust::tuple<T, T>& x, const thrust::tuple<T, T>& y) const
+  __host__ __device__ thrust::tuple<T, T> operator()(const thrust::tuple<T, T>& x, const thrust::tuple<T, T>& y) const
   {
     return thrust::make_tuple(m_a * thrust::get<0>(x) + thrust::get<0>(y),
                               m_a * thrust::get<1>(x) + thrust::get<1>(y));
@@ -60,7 +60,7 @@ struct tuple_axpy<T, 3> : public thrust::binary_function<thrust::tuple<T, T, T>,
 { 
   tuple_axpy(T a) : m_a(a) {}
 
-  thrust::tuple<T, T, T> operator()(const thrust::tuple<T, T, T>& x, const thrust::tuple<T, T, T>& y) const
+  __host__ __device__ thrust::tuple<T, T, T> operator()(const thrust::tuple<T, T, T>& x, const thrust::tuple<T, T, T>& y) const
   {
     return thrust::make_tuple(m_a * thrust::get<0>(x) + thrust::get<0>(y),
                               m_a * thrust::get<1>(x) + thrust::get<1>(y),
@@ -76,7 +76,7 @@ struct tuple_axpy<T, 4> : public thrust::binary_function<thrust::tuple<T, T, T, 
 { 
   tuple_axpy(T a) : m_a(a) {}
 
-  thrust::tuple<T, T, T, T> operator()(const thrust::tuple<T, T, T, T>& x, const thrust::tuple<T, T, T, T>& y) const
+  __host__ __device__ thrust::tuple<T, T, T, T> operator()(const thrust::tuple<T, T, T, T>& x, const thrust::tuple<T, T, T, T>& y) const
   {
     return thrust::make_tuple(m_a * thrust::get<0>(x) + thrust::get<0>(y),
                               m_a * thrust::get<1>(x) + thrust::get<1>(y),

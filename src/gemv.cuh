@@ -31,29 +31,29 @@
 BEGIN_NAMESPACE
 
 // assumption: the matrix m is row major
-template<typename T>
+template<typename T, typename ConstItr, typename Itr>
 __device__ void gemv(const T* m, bool transpose, std::size_t row, std::size_t col,
-                     T alpha, const T* x, std::size_t incx, T beta, T* y, std::size_t incy)
+                     T alpha, ConstItr x, std::size_t incx, T beta, Itr y, std::size_t incy)
 {
   assert(incx > 0 && incy > 0);
   if (transpose)
   {
     for (std::size_t i = 0; i < col; ++i)
     {
-      T val = beta * y[i * incy];
+      T val = beta * *(y + i * incy);
       for (std::size_t j = 0; j < row; ++j)
-        val += alpha * x[j * incx] * m[i + j * col];
-      y[i * incy] = val;
+        val += alpha * *(x + j * incx) * m[i + j * col];
+      *(y + i * incy) = val;
     }
   }
   else
   {
     for (std::size_t i = 0; i < row; ++i)
     {
-      T val = beta * y[i * incy];
+      T val = beta * *(y + i * incy);
       for (std::size_t j = 0; j < col; ++j)
-        val += alpha * x[j * incx] * m[j + i * col];
-      y[i * incy] = val;
+        val += alpha * *(x+ j * incx) * m[j + i * col];
+      *(y + i * incy) = val;
     }
   }
 }

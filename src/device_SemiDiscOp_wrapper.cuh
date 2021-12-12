@@ -38,8 +38,8 @@ struct device_SemiDiscOp_wrapper
   int m_GridSize;
   int m_BlockSize;
 
-  template<typename T>
-  void operator()(const T* in_cbegin, std::size_t size, T t, T* out_begin) const
+  template<typename T, typename ConstItr, typename Itr>
+  void operator()(ConstItr in_cbegin, std::size_t size, T t, Itr out_begin) const
   { k_opx(m_GridSize, m_BlockSize, in_cbegin, size, t, out_begin, m_Dop); }
 };
 

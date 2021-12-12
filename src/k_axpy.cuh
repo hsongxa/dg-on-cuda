@@ -33,6 +33,8 @@
 
 BEGIN_NAMESPACE
 
+// single pointer version
+
 template<typename T>
 __global__ void axpy(T a, const T* x, std::size_t n, const T* y, T* out)
 {
@@ -55,6 +57,9 @@ void k_axpy_auto(T a, const T* x, std::size_t n, const T* y, T* out)
 template<typename T>
 void k_axpy(int grid_size, int block_size, T a, const T* x, std::size_t n, const T* y, T* out)
 { axpy<<<grid_size, block_size>>>(a, x, n, y, out); }
+
+// zip_iterator version: directly use axpy_n instead, which calls thrust::tranform(),
+// which will generate device code if the zipped iterators are from device_vectors
 
 END_NAMESPACE
 

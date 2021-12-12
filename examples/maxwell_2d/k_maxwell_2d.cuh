@@ -25,28 +25,38 @@
 #ifndef K_MAXWELL_2D_CUH
 #define K_MAXWELL_2D_CUH
 
+#include <thrust/device_vector.h>
+
 #include "d_maxwell_2d.cuh"
 
 // NOTE: See the note of the companion .cu file.
 
+// "D" stands for device
+using DIntVector = thrust::device_vector<int>;
+using DDblVector = thrust::device_vector<double>;
+using DDblIterator = DDblVector::iterator;
+using DIteratorTuple = thrust::tuple<DDblIterator, DDblIterator, DDblIterator>;
+using DZipIterator = thrust::zip_iterator<DIteratorTuple>;
+
 d_maxwell_2d<double, int>* create_device_object(int num_cells, int order, double* dr, double* ds, double* l,
-                                                int* face_0_nodes, int* face_1_nodes, int* face_2_nodes,
-                                                double* inv_jacobians, double* Js, double* face_Js,
-                                                int* interface_cells, int* interface_faces, int num_boundary_nodes,
-                                                double* boundary_node_Xs, double* boundary_node_Ys,
-                                                double* outward_normal_Xs, double* outward_normal_Ys,
-                                                int** d_face0_nodes, int** d_face1_nodes, int** d_face2_nodes,
-                                                double** d_inv_jacobians, double** d_Js, double** d_face_Js,
-                                                int** d_interface_cells, int** d_interface_faces,
-                                                double** d_boundary_node_Xs, double** d_boundary_node_Ys,
-                                                double** d_outward_normal_Xs, double** d_outward_normal_Ys);
+                                                const DIntVector& face_0_nodes,
+                                                const DIntVector& face_1_nodes,
+                                                const DIntVector& face_2_nodes,
+                                                const DDblVector& inv_jacobians,
+                                                const DDblVector& Js,
+                                                const DDblVector& face_Js,
+                                                const DIntVector& interface_cells,
+                                                const DIntVector& interface_faces,
+                                                int num_boundary_nodes,
+                                                const DDblVector& boundary_node_Xs,
+                                                const DDblVector& boundary_node_Ys,
+                                                const DDblVector& outward_normal_Xs,
+                                                const DDblVector& outward_normal_Ys);
 
-void rk4_on_device(int gridSize, int blockSize, double* inout, std::size_t size, double t, double dt,
-                   d_maxwell_2d<double, int>* d_op, double* wk0, double* wk1, double* wk2, double* wk3, double* wk4);
+void rk4_on_device(int gridSize, int blockSize, DZipIterator inout, std::size_t size, double t, double dt,
+                   d_maxwell_2d<double, int>* d_op, DZipIterator wk0, DZipIterator wk1, DZipIterator wk2,
+                   DZipIterator wk3, DZipIterator wk4);
 
-void destroy_device_object(d_maxwell_2d<double, int>* device_obj, int* d_face0_nodes, int* d_face1_nodes,
-                           int* d_face2_nodes, double* d_inv_jacobians, double* d_Js, double* d_face_Js,
-                           int* d_interface_cells, int* d_interface_faces, double* d_boundary_node_Xs,
-                           double* d_boundary_node_Ys, double* d_outward_normal_Xs, double* d_outward_normal_Ys);
+void destroy_device_object(d_maxwell_2d<double, int>* device_obj);
 
 #endif

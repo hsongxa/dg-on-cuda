@@ -16,7 +16,7 @@ NVCC := $(CUDA_PATH)/bin/nvcc
 # separate compilation -- the above CUDA version supports c++ up to 14
 NVCC_FLAGS := -std=c++14 -dc -Xcompiler
 ifeq ($(DEBUG),1)
-  NVCC_FLAGS += -g3 -O0
+  NVCC_FLAGS += -g3 -O0 -lineinfo
 else
   NVCC_FLAGS += -O3
 endif

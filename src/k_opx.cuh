@@ -32,8 +32,8 @@
 
 BEGIN_NAMESPACE
 
-template<typename T, typename CellOp>
-__global__ void opx(const T* x, std::size_t size, T t, T* out, CellOp* c_op)
+template<typename T, typename ConstItr, typename Itr, typename CellOp>
+__global__ void opx(ConstItr x, std::size_t size, T t, Itr out, CellOp* c_op)
 {
   // figure out the cell id (= thread id) and forward to the device code
   // for processing this cell
@@ -42,11 +42,11 @@ __global__ void opx(const T* x, std::size_t size, T t, T* out, CellOp* c_op)
     c_op->operator()(i, x, size, t, out);
 }
 
-template<typename T, typename CellOp>
-void k_opx(int grid_size, int block_size, const T* x, std::size_t size, T t, T* out, CellOp* c_op)
+template<typename T, typename ConstItr, typename Itr, typename CellOp>
+void k_opx(int grid_size, int block_size, ConstItr x, std::size_t size, T t, Itr out, CellOp* c_op)
 {
   opx<<<grid_size, block_size>>>(x, size, t, out, c_op);
-  if (cudaGetLastError()) throw std::runtime_error("failed to launch kernel!");
+  if (cudaGetLastError()) throw std::runtime_error("failed to launch kernel/device code!");
 }
 
 END_NAMESPACE
