@@ -50,6 +50,7 @@ template<typename CT, typename IT> // CT - vertex coordinate type, IT - index ty
 class simple_triangular_mesh_2d
 {
 public:
+  using index_type = IT;
   using vertex_type = point_2d<CT>;
   using face_type = segment_2d<vertex_type>;
   using cell_type = triangle_2d<vertex_type>;

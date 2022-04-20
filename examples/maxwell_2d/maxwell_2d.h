@@ -86,8 +86,8 @@ maxwell_2d<T, M>::maxwell_2d(const M& mesh, int order)
   dense_matrix_t m = mInv.inverse();
 
   auto vGrad = refElem.grad_vandermonde_matrix(this->m_order);
-  m_Dr = v * vGrad.first.transpose() * m;
-  m_Ds = v * vGrad.second.transpose() * m;
+  m_Dr = v * vGrad.first.transpose() * m; // this is the Dr in weak form
+  m_Ds = v * vGrad.second.transpose() * m; // this is the Ds in weak form
 
   // surface integration matrix for triangle element
   auto numFaceNodes = refElem.num_face_nodes(this->m_order);
@@ -279,7 +279,6 @@ void maxwell_2d<T, M>::operator()(ConstZipItr in, std::size_t size, T t, ZipItr 
 
   for (int c = 0; c < this->m_mesh->num_cells(); ++c)
   {
-
     dense_matrix_t Dx = m_Dr * this->Inv_Jacobians[c * 4] + m_Ds * this->Inv_Jacobians[c * 4 + 2];
     dense_matrix_t Dy = m_Dr * this->Inv_Jacobians[c * 4 + 1] + m_Ds * this->Inv_Jacobians[c * 4 + 3];
 
