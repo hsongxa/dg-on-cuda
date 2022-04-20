@@ -4,7 +4,7 @@ A CUDA/C++ implementation of the Discontinuous Galerkin method as presented in t
 
 **Nodal Discontinuous Galerkin Methods - Algorithms, Analysis, and Applications, Jan S. Hesthaven and Tim Warburton, Springer, 2008**
 
-The code, built by **g++ 9.3.0** and **CUDA 10.2**, was tested on **NVIDIA Volta GPU** (CUDA Capability 7.2). It can be configured to run on GPU or CPU-only by the flag **`USE_CPU_ONLY`** defined in `/src/config.h`.
+The code, built by **g++ 7.5.0** and **CUDA 10.2**, was tested on **NVIDIA Volta GPU** (CUDA Capability 7.2). It can be configured to run on GPU or CPU-only by the flag **`USE_CPU_ONLY`** defined in `/src/config.h`.
 
 The code adopts the "one-thread-per-element" strategy for parallelization - each thread performs computations for a single element. Layouts of degree-of-freedoms (**DOF**s) in the solution vectors promote coalesced memory access. CUDA constant memory is used to store small-sized, but frequently accessed, data to improve performance.
 
@@ -18,8 +18,7 @@ In the subfolder of each example, there is a PDF file describing the problem, th
 
 Example problems:
 
- - Poisson's equation in 2D
  - Stokes equation in 2D
  - Incompressible Navier-Stokes equation in 2D
 
-3D problems will be covered by a future repository.
+3D problems will be covered by a future repository (`flux-reconstruction-schemes`).

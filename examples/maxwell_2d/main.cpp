@@ -64,7 +64,7 @@ double compute_error_norm(ZipItr it_ref, ZipItr it, int size)
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
 
-  const std::string meshFile = "square_domain_coarse.msh";
+  const std::string meshFile = "../square_domain_coarse.msh";
   const auto meshPtr = dgc::gmsh_importer_exporter<double, int>::import_triangle_mesh_2d(meshFile);
 
   int numCells = meshPtr->num_cells();

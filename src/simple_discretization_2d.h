@@ -43,10 +43,12 @@ template<typename T, typename M> // T - number type, M - mesh type
 class simple_discretization_2d
 {
 public:
+  using index_type = typename M::index_type;
+
   simple_discretization_2d(const M& mesh, int order); 
   ~simple_discretization_2d(){}
   
-  int total_num_nodes() const; 
+  index_type total_num_nodes() const; 
 
   // prepare for GPU execution
   template<typename OutputIterator1, typename OutputIterator2, typename OutputIterator3>
@@ -54,7 +56,7 @@ public:
   template<typename OutputIterator1, typename OutputIterator2>
   void fill_cell_interfaces(OutputIterator1 it1, OutputIterator2 it2) const;
   template<typename OutputIterator1, typename OutputIterator2>
-  int fill_boundary_nodes(OutputIterator1 it1, OutputIterator2 it2) const; // return the number of boundary nodes
+  index_type fill_boundary_nodes(OutputIterator1 it1, OutputIterator2 it2) const; // return the number of boundary nodes
   template<typename OutputIterator1, typename OutputIterator2>
   void fill_outward_normals(OutputIterator1 it1, OutputIterator2 it2) const;
 
@@ -68,6 +70,20 @@ public:
   // to compute so pre-compute them, but for J and face Js which are relatively
   // cheap to compute, they will be computed on-the-fly
   std::vector<T> Inv_Jacobians;
+
+  // TODO: implement standard operators such as grad, div, curl, laplace, etc.
+  //
+  // template<typename Itr, typename OutItr>
+  // void grad(Itr in, OutItr out_x, OutItr out_y)
+  //
+  // template<typename Itr, typename OutItr>
+  // void div(Itr in_x, Itr in_y, OutItr out)
+  //
+  // template<typename Itr, typename OutItr>
+  // void curl(Itr in_x, Itr in_y, OutItr out_x, OutItr out_y)
+  //
+  // template<typename Itr, typename OutItr>
+  // void laplace(Itr in, OutItr out)
 
 protected:
   using dense_matrix_t = dense_matrix<T, false>; // row major
@@ -100,7 +116,8 @@ simple_discretization_2d<T, M>::simple_discretization_2d(const M& mesh, int orde
 }
 
 template<typename T, typename M>
-int simple_discretization_2d<T, M>::total_num_nodes() const
+typename simple_discretization_2d<T, M>::index_type
+simple_discretization_2d<T, M>::total_num_nodes() const
 {
   reference_element refElem;
   return m_mesh->num_cells() * refElem.num_nodes(m_order);
@@ -161,11 +178,12 @@ void simple_discretization_2d<T, M>::fill_cell_interfaces(OutputIterator1 it1, O
 // as noted in above, the order of iterating these boundary faces must be the same as
 // in fill_cell_interfaces
 template<typename T, typename M> template<typename OutputIterator1, typename OutputIterator2>
-int simple_discretization_2d<T, M>::fill_boundary_nodes(OutputIterator1 it1, OutputIterator2 it2) const
+typename simple_discretization_2d<T, M>::index_type
+simple_discretization_2d<T, M>::fill_boundary_nodes(OutputIterator1 it1, OutputIterator2 it2) const
 {
   reference_element refElem;
   const int numFaceNodes = refElem.num_face_nodes(m_order);
-  int numBoundaryNodes = 0;
+  index_type numBoundaryNodes = 0;
 
   using point_type = point_2d<T>;
   std::vector<std::pair<T, T>> pos;
