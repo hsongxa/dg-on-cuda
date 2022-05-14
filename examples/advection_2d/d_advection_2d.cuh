@@ -33,7 +33,7 @@
 #include "gemv.cuh"
 
 
-// device code - a simplified version of the advection_2d class on host
+// a simplified version of the advection_2d class on device
 template<typename T, typename I>
 struct d_advection_2d : public dgc::d_simple_discretization_2d<T, I>
 {

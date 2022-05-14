@@ -73,7 +73,6 @@ d_advection_2d<double, int>* create_device_object(int num_cells, int order, doub
                                                  d_interface_cells, d_interface_faces, d_boundary_node_Xs, d_boundary_node_Ys,
                                                  d_outward_normal_Xs, d_outward_normal_Ys);
 
-
   d_advection_2d<double, int> tmp;
   tmp.NumCells = num_cells;
   tmp.Order = order;

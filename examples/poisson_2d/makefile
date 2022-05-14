@@ -23,7 +23,7 @@ endif
 CUDA_LINK_FLAGS := -dlink
 
 CUDA_INCL := -I$(CUDA_PATH)/include
-CUDA_LIBS := -L$(CUDA_PATH)/lib64 -lcusparse -lcusolver 
+CUDA_LIBS := -L$(CUDA_PATH)/lib64 -lcudart -lcusparse -lcusolver 
 
 CUDA_SRCS := $(wildcard *.cu) $(wildcard $(SRC_DIR)/*.cu)
 CUDA_OBJS := $(patsubst %.cu, %.o, $(notdir $(CUDA_SRCS)))
@@ -47,9 +47,8 @@ CUDA_LINK_OBJ := cuLink.o
 
 all: $(EXEC)
 $(EXEC): $(CUDA_OBJS) $(OBJS)
-#	$(NVCC) $(GPU_CARD) $(CUDA_LINK_FLAGS) -o $(CUDA_LINK_OBJ) $(CUDA_OBJS)
-#	$(CC) -o $@ $(OBJS) $(LIBS) $(CUDA_OBJS) $(CUDA_LINK_OBJ) $(CUDA_LIBS)
-	$(CC) -o $@ $(OBJS) $(LIBS) $(CUDA_OBJS) $(CUDA_LIBS) # CPU only build - to remove and uncomment the above two lines
+	$(NVCC) $(GPU_CARD) $(CUDA_LINK_FLAGS) -o $(CUDA_LINK_OBJ) $(CUDA_OBJS)
+	$(CC) -o $@ $(OBJS) $(LIBS) $(CUDA_OBJS) $(CUDA_LINK_OBJ) $(CUDA_LIBS)
 
 %.o: %.cpp
 	$(CC) $(INCL) $(CUDA_INCL) $(CFLAGS) -c $< -o $@

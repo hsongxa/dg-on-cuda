@@ -129,7 +129,7 @@ void poisson_2d<T, M>::exact_solution(OutputItr it) const
     {
       const cell_type cell = this->m_mesh->get_cell(i);
       const point_type pnt = mapping::rs_to_xy(cell, point_type(pos[j].first, pos[j].second)); 
-      *it = std::sin(pnt.x() * M_PI) * std::sin(pnt.y() * M_PI);
+      *it++ = std::sin(pnt.x() * M_PI) * std::sin(pnt.y() * M_PI);
     }
 }
 
@@ -153,7 +153,7 @@ void poisson_2d<T, M>::rhs(OutputItr it) const
     {
       const cell_type cell = this->m_mesh->get_cell(i);
       const point_type pnt = mapping::rs_to_xy(cell, point_type(pos[j].first, pos[j].second)); 
-      *it = - dgc::const_val<T, 2> * M_PI * M_PI * std::sin(pnt.x() * M_PI) * std::sin(pnt.y() * M_PI);
+      *it++ = - dgc::const_val<T, 2> * M_PI * M_PI * std::sin(pnt.x() * M_PI) * std::sin(pnt.y() * M_PI);
     }
 }
 
