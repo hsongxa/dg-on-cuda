@@ -32,7 +32,7 @@
 
 #define MAX_APPROX_ORDER 6
 
-// device code which is a simplified version of the advection_1d class on host
+// a simplified version of the advection_1d class on device
 template<typename T>
 struct d_advection_1d
 {
