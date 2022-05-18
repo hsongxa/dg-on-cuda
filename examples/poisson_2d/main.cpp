@@ -133,7 +133,6 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < u.size(); ++i)
   {
     std::fill(u.begin(), u.end(), 0.0);
-    // TODO: layout for GPU and CPU should be different!
     u[i] = 1.0;
 
 #if defined USE_CPU_ONLY
@@ -154,9 +153,9 @@ int main(int argc, char **argv) {
        [](const tuple<int, int, double>& a, const tuple<int, int, double>& b)
        { return get<0>(a) == get<0>(b) ? get<1>(a) < get<1>(b) : get<0>(a) < get<0>(b); });
 
-  vector<int> csrRowPtrA;
-  vector<int> csrColIndA;
-  vector<double> csrValA;
+  thrust::host_vector<int> csrRowPtrA;
+  thrust::host_vector<int> csrColIndA;
+  thrust::host_vector<double> csrValA;
   int prev_row = -1;
   for(int entryIdx = 0; entryIdx < aEntries.size(); ++entryIdx)
   {
@@ -202,9 +201,24 @@ int main(int argc, char **argv) {
   assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
 
   int singularity;
-  cusolver_status = cusolverSpDcsrlsvluHost(solver_handle, u.size(), csrValA.size(),
+#if defined USE_CPU_ONLY
+  cusolver_status = cusolverSpDcsrlsvqrHost(solver_handle, u.size(), csrValA.size(),
                                             descrA, csrValA.data(), csrRowPtrA.data(), csrColIndA.data(),
                                             rhs.data(), 0.000001, 0, u.data(), &singularity);
+#else
+  thrust::device_vector<int> d_csrRowPtrA = csrRowPtrA;
+  thrust::device_vector<int> d_csrColIndA = csrColIndA;;
+  thrust::device_vector<double> d_csrValA = csrValA;
+  thrust::device_vector<double> d_rhs = rhs;
+  thrust::device_vector<double> d_u = rhs;
+  cusolver_status = cusolverSpDcsrlsvqr(solver_handle, d_u.size(), d_csrValA.size(),
+                                        descrA, thrust::raw_pointer_cast(d_csrValA.data()),
+                                        thrust::raw_pointer_cast(d_csrRowPtrA.data()),
+                                        thrust::raw_pointer_cast(d_csrColIndA.data()),
+                                        thrust::raw_pointer_cast(d_rhs.data()), 0.000001, 0,
+                                        thrust::raw_pointer_cast(d_u.data()), &singularity);
+  u = d_u;
+#endif
   assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
   assert(singularity < 0);
 
