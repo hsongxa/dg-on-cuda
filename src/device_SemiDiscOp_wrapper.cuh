@@ -42,16 +42,6 @@ __global__ void opx(ConstItr x, std::size_t size, T t, Itr out, CellOp* c_op)
     c_op->operator()(i, x, size, t, out);
 }
 
-//template<typename Itr, typename CellOp>
-//__global__ void opx(Itr x, std::size_t size, CellOp* c_op)
-//{
-//  // figure out the cell id (= thread id) and forward to the device code
-//  // for processing this cell
-//  uint tid = blockIdx.x * blockDim.x + threadIdx.x;
-//  for (uint i = tid; i < c_op->num_cells(); i += blockDim.x * gridDim.x)
-//    c_op->operator()(i, x, size);
-//}
-
 template<typename DeviceSemiDiscOp>
 struct device_SemiDiscOp_wrapper
 {
@@ -65,13 +55,6 @@ struct device_SemiDiscOp_wrapper
     opx<<<m_GridSize, m_BlockSize>>>(in_cbegin, size, t, out_begin, m_Dop);
     if (cudaGetLastError()) throw std::runtime_error("failed to launch kernel/device code!");
   }
-
-  //template<typename Itr>
-  //void operator()(Itr inout_begin, std::size_t size) const
-  //{
-  //  opx<<<m_GridSize, m_BlockSize>>>(inout_begin, size, m_Dop);
-  //  if (cudaGetLastError()) throw std::runtime_error("failed to launch kernel/device code!");
-  //}
 };
 
 END_NAMESPACE
