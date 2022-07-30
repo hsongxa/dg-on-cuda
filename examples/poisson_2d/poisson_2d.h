@@ -42,9 +42,7 @@ public:
   poisson_2d(const M& mesh, int order); 
   ~poisson_2d(){}
   
-  // the layout of DOFs in memory are different for CPU execution and GPU execution;
-  // the first iterator sets the DOF positions and the second iterator sets the
-  // initial values of the DOFs
+  // note that the layout of DOFs in memory are different for CPU execution and GPU execution
   template<typename OutputItr>
   void exact_solution(OutputItr it) const;
 
