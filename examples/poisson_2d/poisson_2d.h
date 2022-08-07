@@ -29,6 +29,7 @@
 #include <vector>
 #include <math.h>
 
+#include "laplace_2d.h"
 #include "simple_discretization_2d.h"
 
 // host code that represent the problem of Poisson's equation in two dimensional space
@@ -63,16 +64,25 @@ private:
   using typename dgc::simple_discretization_2d<T, M>::reference_element;
   using typename dgc::simple_discretization_2d<T, M>::mapping;
 
-  // work spaces
-  mutable std::vector<T> m_qx;
-  mutable std::vector<T> m_qy;
-  mutable std::vector<T> m_du;
+  laplace_2d<T, M> m_laplace_op;
+
+private:
+  struct dirichlet_bc
+  {
+    // see pp. 248-249, also Table 1 of the 2017 paper by N. Fehn et al.
+    T exterior_val(T x, T y, T interior_val) { return - interior_val; }
+    T exterior_grad_n(T x, T y, T interior_grad_n) { return interior_grad_n; }
+  };
 };
 
 template<typename T, typename M>
 poisson_2d<T, M>::poisson_2d(const M& mesh, int order)
-  : dgc::simple_discretization_2d<T, M>(mesh, order)
+  : dgc::simple_discretization_2d<T, M>(mesh, order), m_laplace_op(mesh, order)
 {
+  // note: the process of constructing the matrices below has already been done
+  // note: when constructing the laplace operator above, but we repeat here
+  // note: for the sake of exposing them to device code
+
   // volume integration matrices
   reference_element refElem;
   dense_matrix_t v = refElem.vandermonde_matrix(this->m_order);
@@ -99,12 +109,6 @@ poisson_2d<T, M>::poisson_2d(const M& mesh, int order)
         mE(eN[row], e * numFaceNodes + col) = eM(row, col);
   }
   m_L = mInv * mE; // need to work with faceJ's and cellJ^-1 later
-
-  // work space allocation
-  auto numCells = this->m_mesh->num_cells();
-  m_qx.resize(numCells * numCellNodes);
-  m_qy.resize(numCells * numCellNodes);
-  m_du.resize(numCells * 3 * numFaceNodes);
 }
 
 template<typename T, typename M> template<typename OutputItr>
@@ -159,118 +163,7 @@ void poisson_2d<T, M>::rhs(OutputItr it) const
 template<typename T, typename M> template<typename RandAccItr>
 void poisson_2d<T, M>::operator()(RandAccItr it) const
 {
-  using point_type = dgc::point_2d<T>;
-
-  reference_element refElem;
-  int numCellNodes = refElem.num_nodes(this->m_order);
-  int numFaceNodes = refElem.num_face_nodes(this->m_order);
-
-  std::vector<std::pair<T, T>> pos;
-  refElem.node_positions(this->m_order, std::back_inserter(pos));
-
-  std::vector<T> toLiftX(3 * numFaceNodes);
-  std::vector<T> toLiftY(3 * numFaceNodes);
-
-  // first pass to get (qx, qy)
-  auto qxItr = m_qx.begin();
-  auto qyItr = m_qy.begin();
-  for (int c = 0; c < this->m_mesh->num_cells(); ++c)
-  {
-    dense_matrix_t Dx = m_Dr * this->Inv_Jacobians[c * 4] + m_Ds * this->Inv_Jacobians[c * 4 + 2];
-    dense_matrix_t Dy = m_Dr * this->Inv_Jacobians[c * 4 + 1] + m_Ds * this->Inv_Jacobians[c * 4 + 3];
-
-    int cOffset = c * numCellNodes;
-    Dx.gemv(dgc::const_val<T, 1>, it + cOffset, dgc::const_val<T, 0>, qxItr + cOffset);
-    Dy.gemv(dgc::const_val<T, 1>, it + cOffset, dgc::const_val<T, 0>, qyItr + cOffset);
-
-    // numerical flux of u (p. 275)
-    T du;
-    const auto cell = this->m_mesh->get_cell(c);
-    for (int e = 0; e < 3; ++e)
-    {
-      bool isBoundary;
-      int nbCell, nbLocalEdgeIdx;
-      std::tie(isBoundary, nbCell, nbLocalEdgeIdx) = this->m_mesh->get_face_neighbor(c, e);
-
-      const std::vector<int>& faceNodes = e == 0 ? this->F0_Nodes : (e == 1 ? this->F1_Nodes : this->F2_Nodes);
-      const std::vector<int>& nbFaceNodes =
-        nbLocalEdgeIdx == 0 ? this->F0_Nodes : (nbLocalEdgeIdx == 1 ? this->F1_Nodes : this->F2_Nodes);
-
-      int eOffset = e * numFaceNodes;
-      point_type n = cell.outward_normal(e);
-      T faceJ = mapping::face_J(cell, e);
-      for (int i = 0; i < numFaceNodes; ++i)
-      {
-        if(isBoundary)
-          du = *(it + c * numCellNodes + faceNodes[i]); // u = 0 at boundary
-        else
-          du = (*(it + c * numCellNodes + faceNodes[i]) -
-                *(it + nbCell * numCellNodes + nbFaceNodes[numFaceNodes - i - 1]));
-        m_du[c * 3 * numFaceNodes + eOffset + i] = du; // store du
-
-        toLiftX[eOffset + i] = n.x() * du * faceJ / dgc::const_val<T, 2>;
-        toLiftY[eOffset + i] = n.y() * du * faceJ / dgc::const_val<T, 2>;
-      }
-    }
-
-    // lift
-    T cellJ = mapping::J(cell);
-    m_L.gemv(- dgc::const_val<T, 1> / cellJ, toLiftX.cbegin(), dgc::const_val<T, 1>, qxItr + cOffset);
-    m_L.gemv(- dgc::const_val<T, 1> / cellJ, toLiftY.cbegin(), dgc::const_val<T, 1>, qyItr + cOffset);
-  }
-
-  // second pass to get residuals
-  for (int c = 0; c < this->m_mesh->num_cells(); ++c)
-  {
-    dense_matrix_t Dx = m_Dr * this->Inv_Jacobians[c * 4] + m_Ds * this->Inv_Jacobians[c * 4 + 2];
-    dense_matrix_t Dy = m_Dr * this->Inv_Jacobians[c * 4 + 1] + m_Ds * this->Inv_Jacobians[c * 4 + 3];
-
-    int cOffset = c * numCellNodes;
-    Dx.gemv(dgc::const_val<T, 1>, qxItr + cOffset, dgc::const_val<T, 0>, it + cOffset);
-    Dy.gemv(dgc::const_val<T, 1>, qyItr + cOffset, dgc::const_val<T, 1>, it + cOffset);
-
-    // numerical flux of (qx, qy) (p. 275, using tau = 1)
-    T dqx, dqy;
-    const auto cell = this->m_mesh->get_cell(c);
-    for (int e = 0; e < 3; ++e)
-    {
-      bool isBoundary;
-      int nbCell, nbLocalEdgeIdx;
-      std::tie(isBoundary, nbCell, nbLocalEdgeIdx) = this->m_mesh->get_face_neighbor(c, e);
-
-      const std::vector<int>& faceNodes = e == 0 ? this->F0_Nodes : (e == 1 ? this->F1_Nodes : this->F2_Nodes);
-      const std::vector<int>& nbFaceNodes =
-        nbLocalEdgeIdx == 0 ? this->F0_Nodes : (nbLocalEdgeIdx == 1 ? this->F1_Nodes : this->F2_Nodes);
-
-      int eOffset = e * numFaceNodes;
-      point_type n = cell.outward_normal(e);
-      T faceJ = mapping::face_J(cell, e);
-      for (int i = 0; i < numFaceNodes; ++i)
-      {
-        if(isBoundary)
-        {
-          point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[i]].first, pos[faceNodes[i]].second));
-          dqx = *(qxItr + c * numCellNodes + faceNodes[i]) -
-                M_PI * std::cos(xyPos.x() * M_PI) * std::sin(xyPos.y() * M_PI); // boundary condition of grad(u)
-          dqy = *(qyItr + c * numCellNodes + faceNodes[i]) -
-                M_PI * std::sin(xyPos.x() * M_PI) * std::cos(xyPos.y() * M_PI); // boundary condition of grad(u)
-        }
-        else
-        {
-          dqx = (*(qxItr + c * numCellNodes + faceNodes[i]) -
-                 *(qxItr + nbCell * numCellNodes + nbFaceNodes[numFaceNodes - i - 1]));
-          dqy = (*(qyItr + c * numCellNodes + faceNodes[i]) -
-                 *(qyItr + nbCell * numCellNodes + nbFaceNodes[numFaceNodes - i - 1]));
-        }
-
-        toLiftX[eOffset + i] = (n.x() * dqx + n.y() * dqy + dgc::const_val<T, 2> * m_du[c * 3 * numFaceNodes + eOffset + i]) *
-                               faceJ / dgc::const_val<T, 2>;
-      }
-    }
-
-    // lift
-    m_L.gemv(- dgc::const_val<T, 1> / mapping::J(cell), toLiftX.cbegin(), dgc::const_val<T, 1>, it + cOffset);
-  }
+  m_laplace_op(it, dirichlet_bc());
 }
 
 #endif
