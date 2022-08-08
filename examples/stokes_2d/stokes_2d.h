@@ -52,9 +52,9 @@ public:
   template<typename ZipItr>
   void exact_solution(T t, ZipItr it) const;
 
-  // CPU execution of advancing a timestep
+  // CPU execution - second order in time
   template<typename ConstZipItr, typename ZipItr>
-  void operator()(ConstZipItr in, std::size_t size, T t, T dt, ZipItr out) const;
+  void advance_timestep(ConstZipItr in0, ConstZipItr in1, std::size_t size, T t, T dt, ZipItr out) const;
 
   // need to easily copy these data to device so make them public
   using typename dgc::simple_discretization_2d<T, M>::dense_matrix_t;
@@ -66,6 +66,9 @@ private:
   using typename dgc::simple_discretization_2d<T, M>::reference_element;
   using typename dgc::simple_discretization_2d<T, M>::mapping;
 
+  // (m_u_tilde_x, m_u_tilde_y) => m_p
+  void solve_pressure() const;
+
   template<typename ConstZipItr>
   void numerical_fluxes(ConstZipItr input, T t) const; // time t is used for boundary conditions
 
@@ -73,6 +76,9 @@ private:
   mutable std::vector<T> m_numericalFlux_Ux;
   mutable std::vector<T> m_numericalFlux_Uy;
   mutable std::vector<T> m_numericalFlux_P;
+  mutable std::vector<T> m_u_tilde_x;
+  mutable std::vector<T> m_u_tilde_y;
+  mutable std::vector<T> m_p;
 
   static constexpr T a = 2.883356L;
   static constexpr T lamda = dgc::const_val<T, 1> + a * a;
@@ -94,7 +100,8 @@ stokes_2d<T, M>::stokes_2d(const M& mesh, int order)
 
   // surface integration matrix for triangle element
   auto numFaceNodes = refElem.num_face_nodes(this->m_order);
-  dense_matrix_t mE(refElem.num_nodes(this->m_order), 3 * numFaceNodes, dgc::const_val<T, 0>);
+  auto numCellNodes = refElem.num_nodes(this->m_order);
+  dense_matrix_t mE(numCellNodes, 3 * numFaceNodes, dgc::const_val<T, 0>);
   for (int e = 0; e < 3; ++e)
   {
     const std::vector<int>& eN = e == 0 ? this->F0_Nodes : (e == 1 ? this->F1_Nodes : this->F2_Nodes);
@@ -108,10 +115,15 @@ stokes_2d<T, M>::stokes_2d(const M& mesh, int order)
   }
   m_L = mInv * mE;
 
-  // space allocation for numerical fluxes
-  m_numericalFlux_Ux.resize(this->m_mesh->num_cells() * 3 * numFaceNodes);
-  m_numericalFlux_Uy.resize(this->m_mesh->num_cells() * 3 * numFaceNodes);
-  m_numericalFlux_P.resize(this->m_mesh->num_cells() * 3 * numFaceNodes);
+  // space allocation for intermediate variables
+  auto numCells = this->m_mesh->num_cells();
+  m_u_tilde_x.resize(numCells * numCellNodes);
+  m_u_tilde_y.resize(numCells * numCellNodes);
+  m_p.resize(numCells * numCellNodes);
+
+  m_numericalFlux_Ux.resize(numCells * 3 * numFaceNodes);
+  m_numericalFlux_Uy.resize(numCells * 3 * numFaceNodes);
+  m_numericalFlux_P.resize(numCells * 3 * numFaceNodes);
 }
 
 template<typename T, typename M> template<typename PosItr, typename DofItr>
@@ -255,12 +267,31 @@ void stokes_2d<T, M>::numerical_fluxes(ConstZipItr input, T t) const
   }
 }
 
-// advance a timestep (t => t + dt)
-template<typename T, typename M> template<typename ConstZipItr, typename ZipItr>
-void stokes_2d<T, M>::operator()(ConstZipItr in, std::size_t size, T t, T dt, ZipItr out) const
+template<typename T, typename M>
+void stokes_2d<T, M>::solve_pressure() const
 {
-  numerical_fluxes(in, t);
+}
 
+// t => t + dt
+template<typename T, typename M> template<typename ConstZipItr, typename ZipItr>
+void stokes_2d<T, M>::advance_timestep(ConstZipItr in0, ConstZipItr in1, std::size_t size, T t, T dt, ZipItr out) const
+{
+  // stage 1: get u_tilde - no advection term in stokes equation
+  const auto in0_Tuple = in0.get_iterator_tuple();
+  const auto in0_Ux = thrust::get<0>(in0_Tuple);
+  const auto in0_Uy = thrust::get<1>(in0_Tuple);
+  const auto in1_Tuple = in1.get_iterator_tuple();
+  const auto in1_Ux = thrust::get<0>(in1_Tuple);
+  const auto in1_Uy = thrust::get<1>(in1_Tuple);
+  for (std::size_t i = 0; i < size; ++i)
+  {
+    m_u_tilde_x[i] = dt * (*(in1_Ux + i) * dgc::const_val<T, 4> - *(in0_Ux + i)) / dgc::const_val<T, 3>;
+    m_u_tilde_y[i] = dt * (*(in1_Uy + i) * dgc::const_val<T, 4> - *(in0_Uy + i)) / dgc::const_val<T, 3>;
+  }
+
+  // stage 2: pressure step
+  solve_pressure();
+/*
   reference_element refElem;
   int numCellNodes = refElem.num_nodes(this->m_order);
   int numFaceNodes = refElem.num_face_nodes(this->m_order);
@@ -268,15 +299,6 @@ void stokes_2d<T, M>::operator()(ConstZipItr in, std::size_t size, T t, T dt, Zi
   // surface-mapped numerical fluxes
   std::vector<T> fHx(3 * numFaceNodes), fHy(3 * numFaceNodes), fEz(3 * numFaceNodes);
 
-  // "un-zip" the iterators
-  const auto inTuple = in.get_iterator_tuple();
-  const auto inHx = thrust::get<0>(inTuple);
-  const auto inHy = thrust::get<1>(inTuple);
-  const auto inEz = thrust::get<2>(inTuple);
-  auto outTuple = out.get_iterator_tuple();
-  auto outHx = thrust::get<0>(outTuple);
-  auto outHy = thrust::get<1>(outTuple);
-  auto outEz = thrust::get<2>(outTuple);
 
   for (int c = 0; c < this->m_mesh->num_cells(); ++c)
   {
@@ -309,6 +331,6 @@ void stokes_2d<T, M>::operator()(ConstZipItr in, std::size_t size, T t, T dt, Zi
     m_L.gemv(- dgc::const_val<T, 1> / cellJ, fHy.cbegin(), dgc::const_val<T, 1>, outHy + offsetC);
     m_L.gemv(- dgc::const_val<T, 1> / cellJ, fEz.cbegin(), dgc::const_val<T, 1>, outEz + offsetC);
   }
-}
+*/}
 
 #endif
