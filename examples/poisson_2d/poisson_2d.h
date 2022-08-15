@@ -64,7 +64,7 @@ private:
   using typename dgc::simple_discretization_2d<T, M>::reference_element;
   using typename dgc::simple_discretization_2d<T, M>::mapping;
 
-  laplace_2d<T, M> m_laplace_op;
+  dgc::laplace_2d<T, M> m_laplace_op;
 
 private:
   struct dirichlet_bc

@@ -30,9 +30,11 @@
 
 #include "simple_discretization_2d.h"
 
+BEGIN_NAMESPACE
+
 // discrete laplace operator in two dimensional space using simple discretization
 template<typename T, typename M> // T - number type, M - mesh type
-class laplace_2d : public dgc::simple_discretization_2d<T, M>
+class laplace_2d : public simple_discretization_2d<T, M>
 {
 public:
 
@@ -43,9 +45,9 @@ public:
   void operator()(RandAccItr it, BC2D bc) const; // operate in-place
 
 private:
-  using typename dgc::simple_discretization_2d<T, M>::dense_matrix_t;
-  using typename dgc::simple_discretization_2d<T, M>::reference_element;
-  using typename dgc::simple_discretization_2d<T, M>::mapping;
+  using typename simple_discretization_2d<T, M>::dense_matrix_t;
+  using typename simple_discretization_2d<T, M>::reference_element;
+  using typename simple_discretization_2d<T, M>::mapping;
   dense_matrix_t m_Dr;
   dense_matrix_t m_Ds;
   dense_matrix_t m_L;
@@ -61,7 +63,7 @@ private:
 
 template<typename T, typename M>
 laplace_2d<T, M>::laplace_2d(const M& mesh, int order)
-  : dgc::simple_discretization_2d<T, M>(mesh, order)
+  : simple_discretization_2d<T, M>(mesh, order)
 {
   // volume integration matrices
   reference_element refElem;
@@ -76,7 +78,7 @@ laplace_2d<T, M>::laplace_2d(const M& mesh, int order)
   // surface integration matrix for triangle element
   auto numCellNodes = refElem.num_nodes(this->m_order);
   auto numFaceNodes = refElem.num_face_nodes(this->m_order);
-  dense_matrix_t mE(numCellNodes, 3 * numFaceNodes, dgc::const_val<T, 0>);
+  dense_matrix_t mE(numCellNodes, 3 * numFaceNodes, const_val<T, 0>);
   for (int e = 0; e < 3; ++e)
   {
     const std::vector<int>& eN = e == 0 ? this->F0_Nodes : (e == 1 ? this->F1_Nodes : this->F2_Nodes);
@@ -101,7 +103,7 @@ laplace_2d<T, M>::laplace_2d(const M& mesh, int order)
 template<typename T, typename M> template<typename RandAccItr, typename BC2D>
 void laplace_2d<T, M>::operator()(RandAccItr it, BC2D bc) const
 {
-  using point_type = dgc::point_2d<T>;
+  using point_type = point_2d<T>;
 
   reference_element refElem;
   int numCellNodes = refElem.num_nodes(this->m_order);
@@ -122,8 +124,8 @@ void laplace_2d<T, M>::operator()(RandAccItr it, BC2D bc) const
     dense_matrix_t Dy = m_Dr * this->Inv_Jacobians[c * 4 + 1] + m_Ds * this->Inv_Jacobians[c * 4 + 3];
 
     int cOffset = c * numCellNodes;
-    Dx.gemv(dgc::const_val<T, 1>, it + cOffset, dgc::const_val<T, 0>, qxItr + cOffset);
-    Dy.gemv(dgc::const_val<T, 1>, it + cOffset, dgc::const_val<T, 0>, qyItr + cOffset);
+    Dx.gemv(const_val<T, 1>, it + cOffset, const_val<T, 0>, qxItr + cOffset);
+    Dy.gemv(const_val<T, 1>, it + cOffset, const_val<T, 0>, qyItr + cOffset);
 
     // numerical flux of u (p. 275)
     T du;
@@ -156,15 +158,15 @@ void laplace_2d<T, M>::operator()(RandAccItr it, BC2D bc) const
 
         // note: strong form and central flux lead to using du for integration;
         // note: in week form one would use the numerical flux instead
-        toLiftX[eOffset + i] = n.x() * du * faceJ / dgc::const_val<T, 2>;
-        toLiftY[eOffset + i] = n.y() * du * faceJ / dgc::const_val<T, 2>;
+        toLiftX[eOffset + i] = n.x() * du * faceJ / const_val<T, 2>;
+        toLiftY[eOffset + i] = n.y() * du * faceJ / const_val<T, 2>;
       }
     }
 
     // lift
     T cellJ = mapping::J(cell);
-    m_L.gemv(- dgc::const_val<T, 1> / cellJ, toLiftX.cbegin(), dgc::const_val<T, 1>, qxItr + cOffset);
-    m_L.gemv(- dgc::const_val<T, 1> / cellJ, toLiftY.cbegin(), dgc::const_val<T, 1>, qyItr + cOffset);
+    m_L.gemv(- const_val<T, 1> / cellJ, toLiftX.cbegin(), const_val<T, 1>, qxItr + cOffset);
+    m_L.gemv(- const_val<T, 1> / cellJ, toLiftY.cbegin(), const_val<T, 1>, qyItr + cOffset);
   }
 
   // second pass to get the laplacian
@@ -174,8 +176,8 @@ void laplace_2d<T, M>::operator()(RandAccItr it, BC2D bc) const
     dense_matrix_t Dy = m_Dr * this->Inv_Jacobians[c * 4 + 1] + m_Ds * this->Inv_Jacobians[c * 4 + 3];
 
     int cOffset = c * numCellNodes;
-    Dx.gemv(dgc::const_val<T, 1>, qxItr + cOffset, dgc::const_val<T, 0>, it + cOffset);
-    Dy.gemv(dgc::const_val<T, 1>, qyItr + cOffset, dgc::const_val<T, 1>, it + cOffset);
+    Dx.gemv(const_val<T, 1>, qxItr + cOffset, const_val<T, 0>, it + cOffset);
+    Dy.gemv(const_val<T, 1>, qyItr + cOffset, const_val<T, 1>, it + cOffset);
 
     // numerical flux of (qx, qy) (p. 275, using tau = 1)
     // note: eqns. 59 and 60 in the 2017 paper give determination of tau per element
@@ -214,14 +216,16 @@ void laplace_2d<T, M>::operator()(RandAccItr it, BC2D bc) const
         }
 
         // similarly, the integration below is due to strong form and the flux used for (qx, qy)
-        toLiftX[eOffset + i] = (n.x() * dqx + n.y() * dqy + dgc::const_val<T, 2> * m_du[c * 3 * numFaceNodes + eOffset + i]) *
-                               faceJ / dgc::const_val<T, 2>;
+        toLiftX[eOffset + i] = (n.x() * dqx + n.y() * dqy + const_val<T, 2> * m_du[c * 3 * numFaceNodes + eOffset + i]) *
+                               faceJ / const_val<T, 2>;
       }
     }
 
     // lift
-    m_L.gemv(- dgc::const_val<T, 1> / mapping::J(cell), toLiftX.cbegin(), dgc::const_val<T, 1>, it + cOffset);
+    m_L.gemv(- const_val<T, 1> / mapping::J(cell), toLiftX.cbegin(), const_val<T, 1>, it + cOffset);
   }
 }
+
+END_NAMESPACE
 
 #endif
