@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
 #endif
   }
 
-  stokes_2d<double, dgc::simple_triangular_mesh_2d<double, int>> op(*meshPtr, order);
+  stokes_2d<dgc::simple_triangular_mesh_2d<double, int>> op(*meshPtr, order);
 #if !defined USE_CPU_ONLY
   thrust::host_vector<double> inv_jacobians;
   thrust::host_vector<double> Js;
@@ -169,13 +169,15 @@ int main(int argc, char **argv) {
   {
     if (t + dt > T) dt = T - t; // the last increment may be less than the pre-defined value
 #if defined USE_CPU_ONLY
-    //dgc::rk4(it0, numNodes, t, dt, op, &dgc::axpy_n<double, HZipIterator, HZipIterator>, it1, it2, it3, it4, it5);
+    op.advance_timestep(it1, it2, numNodes, t, t - dt, dt, it0);
 
 #else
     rk4_on_device(blockDim, blockSize, d_it0, numNodes, t, dt, dOp, d_it1, d_it2, d_it3, d_it4, d_it5);
     cudaDeviceSynchronize();
 #endif
     t += dt;
+    // TODO: update U1 and U2 !!!
+
   }
   auto t1 = std::chrono::system_clock::now();
 

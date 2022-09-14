@@ -71,20 +71,6 @@ public:
   // cheap to compute, they will be computed on-the-fly
   std::vector<T> Inv_Jacobians;
 
-  // TODO: implement standard operators such as grad, div, curl, laplace, etc.
-  //
-  // template<typename Itr, typename OutItr>
-  // void grad(Itr in, OutItr out_x, OutItr out_y)
-  //
-  // template<typename Itr, typename OutItr>
-  // void div(Itr in_x, Itr in_y, OutItr out)
-  //
-  // template<typename Itr, typename OutItr>
-  // void curl(Itr in_x, Itr in_y, OutItr out_x, OutItr out_y)
-  //
-  // template<typename Itr, typename OutItr>
-  // void laplace(Itr in, OutItr out)
-
 protected:
   using dense_matrix_t = dense_matrix<T, false>; // row major
   using reference_element = reference_triangle<T>;

@@ -23,7 +23,7 @@ endif
 CUDA_LINK_FLAGS := -dlink
 
 CUDA_INCL := -I$(CUDA_PATH)/include
-CUDA_LIBS := -L$(CUDA_PATH)/lib64 -lcudart 
+CUDA_LIBS := -L$(CUDA_PATH)/lib64 -lcudart -lcusparse -lcusolver
 
 CUDA_SRCS := $(wildcard *.cu) $(wildcard $(SRC_DIR)/*.cu)
 CUDA_OBJS := $(patsubst %.cu, %.o, $(notdir $(CUDA_SRCS)))
