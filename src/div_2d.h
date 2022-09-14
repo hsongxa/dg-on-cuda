@@ -43,7 +43,7 @@ public:
   
   // operate in place - the result is stored in in0
   template<typename RandItr, typename BC2D>
-  void operator()(RandItr in0, RandItr in1, std::size_t size, BC2D bc) const;
+  void operator()(RandItr in0, RandItr in1, const BC2D& bc) const;
 
 private:
   using typename simple_discretization_2d<T, M>::reference_element;
@@ -54,7 +54,7 @@ private:
   dense_matrix_t m_L;
 
   template<typename RandItr, typename BC2D>
-  void numerical_fluxes(RandItr in0, RandItr in1, BC2D bc) const;
+  void numerical_fluxes(RandItr in0, RandItr in1, const BC2D& bc) const;
   mutable std::vector<T> m_numericalFluxes;
 };
 
@@ -92,7 +92,7 @@ div_2d<T, M>::div_2d(const M& mesh, int order) : simple_discretization_2d<T, M>(
 }
 
 template<typename T, typename M> template<typename RandItr, typename BC2D>
-void div_2d<T, M>::numerical_fluxes(RandItr in0, RandItr in1, BC2D bc) const
+void div_2d<T, M>::numerical_fluxes(RandItr in0, RandItr in1, const BC2D& bc) const
 {
   using point_type = point_2d<T>;
   using cell_type = typename M::cell_type;
@@ -125,8 +125,8 @@ void div_2d<T, M>::numerical_fluxes(RandItr in0, RandItr in1, BC2D bc) const
         if(isBoundary)
         {
           point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[d]].first, pos[faceNodes[d]].second));
-          bU0 = bc.exterior_val(xyPos.x(), xyPos.y(), aU0);
-          bU1 = bc.exterior_val(xyPos.x(), xyPos.y(), aU1);
+          // same API needed from the BC implementation, regardless of Dirichlet or Neumann BC
+          std::tie(bU0, bU1) = bc.exterior_val(xyPos.x(), xyPos.y(), std::make_pair(aU0, aU1));
         }
         else
         {
@@ -150,7 +150,7 @@ void div_2d<T, M>::numerical_fluxes(RandItr in0, RandItr in1, BC2D bc) const
 }
 
 template<typename T, typename M> template<typename RandItr, typename BC2D>
-void div_2d<T, M>::operator()(RandItr in0, RandItr in1, std::size_t size, BC2D bc) const
+void div_2d<T, M>::operator()(RandItr in0, RandItr in1, const BC2D& bc) const
 {
   numerical_fluxes(in0, in1, bc);
 

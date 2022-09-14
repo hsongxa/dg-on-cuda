@@ -43,7 +43,7 @@ public:
   
   // operate in place - the result is stored in in0
   template<typename RandItr, typename BC2D>
-  void operator()(RandItr in0, RandItr in1, std::size_t size, BC2D bc) const;
+  void operator()(RandItr in0, RandItr in1, const BC2D& bc) const;
 
 private:
   using typename simple_discretization_2d<T, M>::reference_element;
@@ -54,7 +54,7 @@ private:
   dense_matrix_t m_L;
 
   template<typename RandItr, typename BC2D>
-  void numerical_fluxes(RandItr in, BC2D bc) const;
+  void numerical_fluxes(RandItr in, const BC2D& bc) const;
   mutable std::vector<T> m_numericalFluxes;
 };
 
@@ -92,7 +92,7 @@ grad_2d<T, M>::grad_2d(const M& mesh, int order) : simple_discretization_2d<T, M
 }
 
 template<typename T, typename M> template<typename RandItr, typename BC2D>
-void grad_2d<T, M>::numerical_fluxes(RandItr in, BC2D bc) const
+void grad_2d<T, M>::numerical_fluxes(RandItr in, const BC2D& bc) const
 {
   using point_type = point_2d<T>;
   using cell_type = typename M::cell_type;
@@ -124,8 +124,8 @@ void grad_2d<T, M>::numerical_fluxes(RandItr in, BC2D bc) const
         if(isBoundary)
         {
           point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[d]].first, pos[faceNodes[d]].second));
-          bU = bc.exterior_val(xyPos.x(), xyPos.y(), aU);
-        }
+          bU = bc.exterior_val(xyPos.x(), xyPos.y(), aU); // same API needed from the BC implementation,
+        }                                                 // regardless of Dirichlet or Neumann BC
         else
         {
           const std::vector<int>& nbFaceNodes = nbLocalEdgeIdx == 0 ? this->F0_Nodes : (nbLocalEdgeIdx == 1 ? this->F1_Nodes : this->F2_Nodes);
@@ -145,7 +145,7 @@ void grad_2d<T, M>::numerical_fluxes(RandItr in, BC2D bc) const
 }
 
 template<typename T, typename M> template<typename RandItr, typename BC2D>
-void grad_2d<T, M>::operator()(RandItr in0, RandItr in1, std::size_t size, BC2D bc) const
+void grad_2d<T, M>::operator()(RandItr in0, RandItr in1, const BC2D& bc) const
 {
   numerical_fluxes(in0, bc);
 
@@ -172,7 +172,7 @@ void grad_2d<T, M>::operator()(RandItr in0, RandItr in1, std::size_t size, BC2D 
     for (int e = 0; e < 3; ++e)
     {
       T faceJ = mapping::face_J(cell, e);
-      point_type n = cell.outward_normal(e);
+      point_2d<T> n = cell.outward_normal(e);
       for (int i = 0; i < numFaceNodes; ++i)
       {
         int ei = e * numFaceNodes + i;

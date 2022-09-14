@@ -42,7 +42,7 @@ public:
   ~laplace_2d(){}
   
   template<typename RandAccItr, typename BC2D>
-  void operator()(RandAccItr it, BC2D bc) const; // operate in-place
+  void operator()(RandAccItr it, const BC2D& bc) const; // operate in-place
 
 private:
   using typename simple_discretization_2d<T, M>::dense_matrix_t;
@@ -101,7 +101,7 @@ laplace_2d<T, M>::laplace_2d(const M& mesh, int order)
 
 // implemented with internal penalty fluxes
 template<typename T, typename M> template<typename RandAccItr, typename BC2D>
-void laplace_2d<T, M>::operator()(RandAccItr it, BC2D bc) const
+void laplace_2d<T, M>::operator()(RandAccItr it, const BC2D& bc) const
 {
   using point_type = point_2d<T>;
 
