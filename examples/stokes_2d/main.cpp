@@ -136,12 +136,11 @@ int main(int argc, char **argv) {
   auto it0P = thrust::make_zip_iterator(thrust::make_tuple(Ux0.begin(), Uy0.begin(), P.begin()));
   op.initialize_dofs(x.begin(), it0);
 
-  // allocate work space for the Runge-Kutta loop and the reference solution
-  thrust::host_vector<double> Ux1(numNodes);
-  thrust::host_vector<double> Uy1(numNodes);
+  thrust::host_vector<double> Ux1 = Ux0;
+  thrust::host_vector<double> Uy1 = Uy0;
   auto it1 = thrust::make_zip_iterator(thrust::make_tuple(Ux1.begin(), Uy1.begin()));
-  thrust::host_vector<double> Ux2(numNodes);
-  thrust::host_vector<double> Uy2(numNodes);
+  thrust::host_vector<double> Ux2 = Ux0;
+  thrust::host_vector<double> Uy2 = Uy0;
   auto it2 = thrust::make_zip_iterator(thrust::make_tuple(Ux2.begin(), Uy2.begin()));
   
   // time advancing loop
@@ -165,12 +164,16 @@ int main(int argc, char **argv) {
 #endif
 
   auto t0 = std::chrono::system_clock::now();
-  while (t < T)
+//  while (t < T)
   {
     if (t + dt > T) dt = T - t; // the last increment may be less than the pre-defined value
 #if defined USE_CPU_ONLY
     op.advance_timestep(it1, it2, numNodes, t, t - dt, dt, it0);
 
+    Ux1 = Ux2;
+    Uy1 = Uy2;
+    Ux2 = Ux0;
+    Uy2 = Uy0;
 #else
     rk4_on_device(blockDim, blockSize, d_it0, numNodes, t, dt, dOp, d_it1, d_it2, d_it3, d_it4, d_it5);
     cudaDeviceSynchronize();
