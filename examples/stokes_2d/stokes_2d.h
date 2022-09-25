@@ -75,6 +75,9 @@ private:
   void pressure_step(double t, double t_prev, double dt,
                      const double* u_t_x, const double* u_t_y, const double* u_t_prev_x, const double* u_t_prev_y) const;
 
+  // old (m_u_tilde_x, m_u_tilde_y), m_p => new (m_u_tilde_x, m_u_tilde_y)
+  void projection_step(double dt) const;
+
   dgc::div_2d<double, M> m_div_2d;
   dgc::grad_2d<double, M> m_grad_2d;
   dgc::laplace_2d<double, M> m_laplace_2d;
@@ -112,85 +115,9 @@ private:
   struct pressure_bc
   {
     // one-time calculation of the hp's (eq. 18) during construction
-    // TODO: move to outside of class definition
     pressure_bc(double t_next, int order, const double* inv_jacobians, const M* mesh,
                 const int* face_0_nodes, const int* face_1_nodes, const int* face_2_nodes,
-                const double* u_t_x, const double* u_t_y, const double* u_t_prev_x, const double* u_t_prev_y)
-    : m_hps(), m_offset_to_hps(0)
-    {
-      using point_type = dgc::point_2d<double>;
-
-      reference_element refElem;
-      std::vector<std::pair<double, double>> pos;
-      refElem.node_positions(order, std::back_inserter(pos));
-      const int* faceNodes[] = {face_0_nodes, face_1_nodes, face_2_nodes};
-
-      dense_matrix_t v = refElem.vandermonde_matrix(order);
-      dense_matrix_t vInv = v.inverse();
-      auto vGrad = refElem.grad_vandermonde_matrix(order);
-      dense_matrix_t Dr = vGrad.first * vInv;
-      dense_matrix_t Ds = vGrad.second * vInv;
-
-      int numCellNodes = refElem.num_nodes(order);
-      int numFaceNodes = refElem.num_face_nodes(order);
-      std::vector<double> curl(numCellNodes);
-      std::vector<double> curlCurlX(numCellNodes);
-      std::vector<double> curlCurlY(numCellNodes);
-      for (int c = 0; c < mesh->num_cells(); ++c)
-      {
-        const auto cell = mesh->get_cell(c);
-
-        bool isFaceBoundary[3];
-        int nbCell, nbLocalEdgeIdx;
-        for (int e = 0; e < 3; ++e)
-          std::tie(isFaceBoundary[e], nbCell, nbLocalEdgeIdx) = mesh->get_face_neighbor(c, e);
-
-        if (isFaceBoundary[0] || isFaceBoundary[1] || isFaceBoundary[2])
-        {
-          // compute the (curl curl u) term
-          dense_matrix_t Dx = Dr * inv_jacobians[c * 4] + Ds * inv_jacobians[c * 4 + 2];
-          dense_matrix_t Dy = Dr * inv_jacobians[c * 4 + 1] + Ds * inv_jacobians[c * 4 + 3];
-
-          int cOffset = c * numCellNodes;
-          // t(n)
-          Dx.gemv(1, u_t_y + cOffset, 0, curl.begin());
-          Dy.gemv(-1, u_t_x + cOffset, 1, curl.begin());
-
-          Dy.gemv(1, curl.begin(), 0, curlCurlX.begin());
-          Dx.gemv(-1, curl.begin(), 0, curlCurlY.begin());
-          // t(n - 1)
-          Dx.gemv(1, u_t_prev_y + cOffset, 0, curl.begin());
-          Dy.gemv(-1, u_t_prev_x + cOffset, 1, curl.begin());
-
-          Dy.gemv(1, curl.begin(), -2, curlCurlX.begin());
-          Dx.gemv(-1, curl.begin(), -2, curlCurlY.begin());
-
-          // store hp's
-          for (int e = 0; e < 3; ++e)
-            if (isFaceBoundary[e])
-            {
-              point_type n = cell.outward_normal(e);
-              double nx = n.x();
-              double ny = n.y();
-
-              for(int i = 0; i < numFaceNodes; ++i)
-              {
-                int nodeIndex = faceNodes[e][i];
-                double curlTerm = curlCurlX[nodeIndex] * nx + curlCurlY[nodeIndex] * ny;
-
-                point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[nodeIndex].first, pos[nodeIndex].second));
-                double x = xyPos.x();
-                double y = xyPos.y();
-                double dgdtX = lamda * std::sin(x) * (a * std::sin(a * y) - std::cos(a) * std::sinh(y)) * std::exp(- lamda * t_next);
-                double dgdtY = lamda * std::cos(x) * (std::cos(a * y) + std::cos(a) * std::cosh(y)) * std::exp(- lamda * t_next);
-                double dgdtTerm = dgdtX * nx + dgdtY * ny;
-
-                m_hps.push_back(dgdtTerm + curlTerm);
-              }
-            }
-        }
-      }
-    }
+                const double* u_t_x, const double* u_t_y, const double* u_t_prev_x, const double* u_t_prev_y);
 
     double exterior_val(double x, double y, double interior_val) const { return interior_val; }
 
@@ -199,21 +126,105 @@ private:
       // NOTE: Below is a hack that assumes this function is called in the same order as those stored
       // in m_hps and only called once per node!!! Otherwise we need to use (x, y) to find the hp,
       // maybe via a map, i.e., extending m_hps to be (x, y) => hps, or something.
-      auto hpPair = m_hps[m_offset_to_hps++];
+      auto hp = m_hps[m_offset_to_hps++];
 
-      return 2 * hpPair - interior_grad_n;
+      return 2 * hp - interior_grad_n;
     }
 
   private:
     std::vector<double> m_hps;
     mutable std::size_t m_offset_to_hps;
   };
+
+  // boundary condition used in the projection step
+  struct pressure_bc_proj
+  { double exterior_val(double x, double y, double interior_val) const { return interior_val; } };
 };
 
 template<typename M>
+stokes_2d<M>::pressure_bc::pressure_bc(double t_next, int order, const double* inv_jacobians, const M* mesh,
+                                       const int* face_0_nodes, const int* face_1_nodes, const int* face_2_nodes,
+                                       const double* u_t_x, const double* u_t_y, const double* u_t_prev_x, const double* u_t_prev_y)
+: m_hps(), m_offset_to_hps(0)
+{
+  using point_type = dgc::point_2d<double>;
+
+  reference_element refElem;
+  std::vector<std::pair<double, double>> pos;
+  refElem.node_positions(order, std::back_inserter(pos));
+  const int* faceNodes[] = {face_0_nodes, face_1_nodes, face_2_nodes};
+
+  dense_matrix_t v = refElem.vandermonde_matrix(order);
+  dense_matrix_t vInv = v.inverse();
+  auto vGrad = refElem.grad_vandermonde_matrix(order);
+  dense_matrix_t Dr = vGrad.first * vInv;
+  dense_matrix_t Ds = vGrad.second * vInv;
+
+  int numCellNodes = refElem.num_nodes(order);
+  int numFaceNodes = refElem.num_face_nodes(order);
+  std::vector<double> curl(numCellNodes);
+  std::vector<double> curlCurlX(numCellNodes);
+  std::vector<double> curlCurlY(numCellNodes);
+  for (int c = 0; c < mesh->num_cells(); ++c)
+  {
+    const auto cell = mesh->get_cell(c);
+
+    bool isFaceBoundary[3];
+    int nbCell, nbLocalEdgeIdx;
+    for (int e = 0; e < 3; ++e)
+      std::tie(isFaceBoundary[e], nbCell, nbLocalEdgeIdx) = mesh->get_face_neighbor(c, e);
+
+    if (isFaceBoundary[0] || isFaceBoundary[1] || isFaceBoundary[2])
+    {
+      // compute the (curl curl u) term
+      dense_matrix_t Dx = Dr * inv_jacobians[c * 4] + Ds * inv_jacobians[c * 4 + 2];
+      dense_matrix_t Dy = Dr * inv_jacobians[c * 4 + 1] + Ds * inv_jacobians[c * 4 + 3];
+
+      int cOffset = c * numCellNodes;
+      // t(n)
+      Dx.gemv(1, u_t_y + cOffset, 0, curl.begin());
+      Dy.gemv(-1, u_t_x + cOffset, 1, curl.begin());
+
+      Dy.gemv(1, curl.begin(), 0, curlCurlX.begin());
+      Dx.gemv(-1, curl.begin(), 0, curlCurlY.begin());
+      // t(n - 1)
+      Dx.gemv(1, u_t_prev_y + cOffset, 0, curl.begin());
+      Dy.gemv(-1, u_t_prev_x + cOffset, 1, curl.begin());
+
+      Dy.gemv(1, curl.begin(), -2, curlCurlX.begin());
+      Dx.gemv(-1, curl.begin(), -2, curlCurlY.begin());
+
+      // store hp's
+      for (int e = 0; e < 3; ++e)
+        if (isFaceBoundary[e])
+        {
+          point_type n = cell.outward_normal(e);
+          double nx = n.x();
+          double ny = n.y();
+
+          for(int i = 0; i < numFaceNodes; ++i)
+          {
+            int nodeIndex = faceNodes[e][i];
+            double curlTerm = curlCurlX[nodeIndex] * nx + curlCurlY[nodeIndex] * ny;
+
+            point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[nodeIndex].first, pos[nodeIndex].second));
+            double x = xyPos.x();
+            double y = xyPos.y();
+            double dgdtX = lamda * std::sin(x) * (a * std::sin(a * y) - std::cos(a) * std::sinh(y)) * std::exp(- lamda * t_next);
+            double dgdtY = lamda * std::cos(x) * (std::cos(a * y) + std::cos(a) * std::cosh(y)) * std::exp(- lamda * t_next);
+            double dgdtTerm = dgdtX * nx + dgdtY * ny;
+
+            m_hps.push_back(dgdtTerm + curlTerm);
+          }
+        }
+    }
+  }
+}
+
+template<typename M>
 stokes_2d<M>::stokes_2d(const M& mesh, int order)
-  : dgc::simple_discretization_2d<double, M>(mesh, order),
-    m_div_2d(mesh, order), m_grad_2d(mesh, order), m_laplace_2d(mesh, order)
+: dgc::simple_discretization_2d<double, M>(mesh, order),
+  m_div_2d(mesh, order), m_grad_2d(mesh, order), m_laplace_2d(mesh, order)
 {
   // space allocation for intermediate variables
   auto numCells = this->m_mesh->num_cells();
@@ -362,13 +373,24 @@ void stokes_2d<M>::pressure_step(double t, double t_prev, double dt,
   int singularity;
   cusolver_status = cusolverSpDcsrlsvqrHost(solver_handle, m_p.size(), csrValA.size(),
                                             descrA, csrValA.data(), csrRowPtrA.data(), csrColIndA.data(),
-                                            m_workspace_0.data(), 0.000001, 0, m_p.data(), &singularity);
+                                            m_workspace_0.data(), 0.00000001, 0, m_p.data(), &singularity);
 
   assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
-  assert(singularity < 0);
+  //assert(singularity < 0);
 
   cusolver_status = cusolverSpDestroy(solver_handle);
   assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
+}
+
+template<typename M>
+void stokes_2d<M>::projection_step(double dt) const
+{
+  m_grad_2d(m_p.begin(), m_workspace_0.begin(), pressure_bc_proj());
+  for (std::size_t i = 0; i < m_u_tilde_x.size(); ++i)
+  {
+    m_u_tilde_x[i] -= 2. * dt * m_p[i] / 3.;
+    m_u_tilde_y[i] -= 2. * dt * m_workspace_0[i] / 3.;
+  }
 }
 
 // t => t + dt
@@ -390,6 +412,19 @@ void stokes_2d<M>::advance_timestep(ConstZipItr in0, ConstZipItr in1, std::size_
 
   // stage 2
   pressure_step(t, t_prev, dt, &(*in1_Ux), &(*in1_Uy), &(*in0_Ux), &(*in0_Uy));
+  projection_step(dt);
+
+  // stage 3
+
+  // output
+  const auto out_Tuple = out.get_iterator_tuple();
+  const auto out_Ux = thrust::get<0>(out_Tuple);
+  const auto out_Uy = thrust::get<1>(out_Tuple);
+  for (std::size_t i = 0; i < size; ++i)
+  {
+    out_Ux[i] = m_u_tilde_x[i]; // TODO: update to results of viscous step
+    out_Uy[i] = m_u_tilde_y[i]; // TODO: update to results of viscous step
+  }
 }
 
 #endif

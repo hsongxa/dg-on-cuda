@@ -41,7 +41,7 @@ public:
   grad_2d(const M& mesh, int order); 
   ~grad_2d(){}
   
-  // operate in place - the result is stored in in0
+  // operate in place - the input is in0 and the outputs are stored in in0 and in1
   template<typename RandItr, typename BC2D>
   void operator()(RandItr in0, RandItr in1, const BC2D& bc) const;
 
