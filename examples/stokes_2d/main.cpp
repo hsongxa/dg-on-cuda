@@ -53,8 +53,7 @@ double compute_error_norm(ZipItr it_ref, ZipItr it, int size)
     auto tuple = it[i];
     auto tupleRef = it_ref[i];
     err += (thrust::get<0>(tupleRef) - thrust::get<0>(tuple)) * (thrust::get<0>(tupleRef) - thrust::get<0>(tuple)) +
-           (thrust::get<1>(tupleRef) - thrust::get<1>(tuple)) * (thrust::get<1>(tupleRef) - thrust::get<1>(tuple)) +
-           (thrust::get<2>(tupleRef) - thrust::get<2>(tuple)) * (thrust::get<2>(tupleRef) - thrust::get<2>(tuple));
+           (thrust::get<1>(tupleRef) - thrust::get<1>(tuple)) * (thrust::get<1>(tupleRef) - thrust::get<1>(tuple)); 
   }
   return err / size;
 }
@@ -133,7 +132,6 @@ int main(int argc, char **argv) {
   thrust::host_vector<double> Uy0(numNodes);
   thrust::host_vector<double> P(numNodes);
   auto it0 = thrust::make_zip_iterator(thrust::make_tuple(Ux0.begin(), Uy0.begin()));
-  auto it0P = thrust::make_zip_iterator(thrust::make_tuple(Ux0.begin(), Uy0.begin(), P.begin()));
   op.initialize_dofs(x.begin(), it0);
 
   thrust::host_vector<double> Ux1 = Ux0;
@@ -145,9 +143,9 @@ int main(int argc, char **argv) {
   
   // time advancing loop
   const double T = 1;
+  double t_prev = 0.0;
   double t = 0.0;
-  double l = 2.0 / std::sqrt(numCells); // length scale of a typical cell
-  double dt = (2.0 / 3.0) * (l / (double)order) * (l / (2.0 + std::sqrt(2.0))); // see p.199
+  double dt = 0.01;
 #if !defined USE_CPU_ONLY
   int blockDim = (numCells + blockSize - 1) / blockSize;
 
@@ -164,31 +162,31 @@ int main(int argc, char **argv) {
 #endif
 
   auto t0 = std::chrono::system_clock::now();
-//  while (t < T)
+  while (t < T)
   {
+    std::cout << "t = " << t << std::endl;
     if (t + dt > T) dt = T - t; // the last increment may be less than the pre-defined value
 #if defined USE_CPU_ONLY
-    op.advance_timestep(it1, it2, numNodes, t, t - dt, dt, it0);
-
-    Ux1 = Ux2;
-    Uy1 = Uy2;
-    Ux2 = Ux0;
-    Uy2 = Uy0;
+    op.advance_timestep(it1, t_prev, it2, t, numNodes, dt, it0);
 #else
     rk4_on_device(blockDim, blockSize, d_it0, numNodes, t, dt, dOp, d_it1, d_it2, d_it3, d_it4, d_it5);
     cudaDeviceSynchronize();
 #endif
-    t += dt;
-    // TODO: update U1 and U2 !!!
 
+    Ux1 = Ux2;
+    Uy1 = Uy2;
+    t_prev = t;
+
+    Ux2 = Ux0;
+    Uy2 = Uy0;
+    t += dt;
   }
   auto t1 = std::chrono::system_clock::now();
 
   // exact solution
   thrust::host_vector<double> Ux_Ref(numNodes);
   thrust::host_vector<double> Uy_Ref(numNodes);
-  thrust::host_vector<double> P_Ref(numNodes);
-  auto it_Ref = thrust::make_zip_iterator(thrust::make_tuple(Ux_Ref.begin(), Uy_Ref.begin(), P_Ref.begin()));
+  auto it_Ref = thrust::make_zip_iterator(thrust::make_tuple(Ux_Ref.begin(), Uy_Ref.begin()));
   op.exact_solution(t, it_Ref);
 
   // output the last error
@@ -196,9 +194,8 @@ int main(int argc, char **argv) {
   Ux0 = d_Ux0;
   Uy0 = d_Uy0;
   P0 = d_P;
-  it0P = thrust::make_zip_iterator(thrust::make_tuple(Ux0.begin(), Uy0.begin(), P0.begin()));
 #endif
-  double errNorm = compute_error_norm(it_Ref, it0P, numNodes);
+  double errNorm = compute_error_norm(it_Ref, it0, numNodes);
   std::cout << "T = " << t << ", error norm = " << errNorm << std::endl;
   std::cout << "time used: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms" << std::endl;
 

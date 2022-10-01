@@ -36,7 +36,6 @@
 
 #include <cusparse.h>
 #include <cusolverSp.h>
-//#include <chrono>
 
 #include "div_2d.h"
 #include "grad_2d.h"
@@ -64,34 +63,48 @@ public:
 
   // CPU execution - second order in time
   template<typename ConstZipItr, typename ZipItr>
-  void advance_timestep(ConstZipItr in0, ConstZipItr in1, std::size_t size, double t, double t_prev, double dt, ZipItr out) const;
+  void advance_timestep(ConstZipItr in0, double t_prev, ConstZipItr in1, double t, std::size_t size, double dt, ZipItr out);
 
 private:
   using typename dgc::simple_discretization_2d<double, M>::dense_matrix_t;
   using typename dgc::simple_discretization_2d<double, M>::reference_element;
   using typename dgc::simple_discretization_2d<double, M>::mapping;
 
-  // (m_u_tilde_x, m_u_tilde_y) => m_p
+  // first (m_u_tilde_x, m_u_tilde_y) => m_p
   void pressure_step(double t, double t_prev, double dt,
-                     const double* u_t_x, const double* u_t_y, const double* u_t_prev_x, const double* u_t_prev_y) const;
+                     const double* u_t_x, const double* u_t_y, const double* u_t_prev_x, const double* u_t_prev_y);
 
-  // old (m_u_tilde_x, m_u_tilde_y), m_p => new (m_u_tilde_x, m_u_tilde_y)
-  void projection_step(double dt) const;
+  // first (m_u_tilde_x, m_u_tilde_y), m_p => second (m_u_tilde_x, m_u_tilde_y)
+  void projection_step(double dt);
+  
+  // second (m_u_tilde_x, m_u_tilde_y) => final (u_x, u_y) stored in (m_u_tilde_x, m_u_tilde_y)
+  void viscous_step(double t, double dt);
+
+  // linear system building and solving - use CUDA linear solvers which need the matrix A explicitly
+  // TODO: implement an implicit version of the discrete laplace operator which returns the matrix
+  // TODO: and the rhs of the inhomogeneous BC to replace the two functions below
+  template<typename BC>
+  std::vector<std::tuple<int, int, double>> build_poisson_sys_matrix(std::vector<double>& temp, const BC& bc) const;
+  template<typename BC>
+  std::vector<std::tuple<int, int, double>> build_helmholtz_sys_matrix(double dt, std::vector<double>& temp, const BC& bc) const;
+  // TODO: this function can be moved out of the class as it is independent to the template parameter M
+  static void solve_sys(std::vector<std::tuple<int, int, double>>& matrix, const std::vector<double>& b, std::vector<double>& x);
 
   dgc::div_2d<double, M> m_div_2d;
   dgc::grad_2d<double, M> m_grad_2d;
   dgc::laplace_2d<double, M> m_laplace_2d;
 
   // work space
-  mutable std::vector<double> m_u_tilde_x;
-  mutable std::vector<double> m_u_tilde_y;
-  mutable std::vector<double> m_workspace_0;
-  mutable std::vector<double> m_p;
+  std::vector<double> m_u_tilde_x;
+  std::vector<double> m_u_tilde_y;
+  std::vector<double> m_workspace;
+  std::vector<double> m_p;
 
   static constexpr double a = 2.883356;
   static constexpr double lamda = 1 + a * a;
 
 private:
+  // boundary conditins - see Table 1 of the 2017 paper by N. Fehn et al.
   struct u_tilde_bc
   {
     u_tilde_bc(double t, double t_prev) : m_t(t), m_t_prev(t_prev) {}
@@ -111,7 +124,7 @@ private:
     double m_t_prev; // t(n-1)
   };
 
-  // Table 1 of the 2017 paper by N. Fehn et al.
+  // used by the pressure step
   struct pressure_bc
   {
     // one-time calculation of the hp's (eq. 18) during construction
@@ -126,7 +139,8 @@ private:
       // NOTE: Below is a hack that assumes this function is called in the same order as those stored
       // in m_hps and only called once per node!!! Otherwise we need to use (x, y) to find the hp,
       // maybe via a map, i.e., extending m_hps to be (x, y) => hps, or something.
-      auto hp = m_hps[m_offset_to_hps++];
+      auto hp = m_hps[m_offset_to_hps % m_hps.size()];
+      ++m_offset_to_hps;
 
       return 2 * hp - interior_grad_n;
     }
@@ -136,9 +150,36 @@ private:
     mutable std::size_t m_offset_to_hps;
   };
 
-  // boundary condition used in the projection step
+  // used by the projection step
   struct pressure_bc_proj
   { double exterior_val(double x, double y, double interior_val) const { return interior_val; } };
+
+  // Dirichlet boundary conditions for velocity components
+  struct u_x_bc
+  {
+    explicit u_x_bc(double t) : m_t(t) {}
+
+    double exterior_val(double x, double y, double interior_val) const
+    { return 2. * std::sin(x) * (a * std::sin(a * y) - std::cos(a) * std::sinh(y)) * std::exp(- lamda * m_t) - interior_val; }
+
+    double exterior_grad_n(double x, double y, double interior_grad_n) const { return interior_grad_n; }
+
+  private:
+    double m_t; // t(n)
+  };
+
+  struct u_y_bc
+  {
+    explicit u_y_bc(double t) : m_t(t) {}
+
+    double exterior_val(double x, double y, double interior_val) const
+    { return 2. * std::cos(x) * (std::cos(a * y) + std::cos(a) * std::cosh(y)) * std::exp(- lamda * m_t) - interior_val; }
+
+    double exterior_grad_n(double x, double y, double interior_grad_n) const { return interior_grad_n; }
+
+  private:
+    double m_t; // t(n)
+  };
 };
 
 template<typename M>
@@ -231,7 +272,7 @@ stokes_2d<M>::stokes_2d(const M& mesh, int order)
   auto numCellNodes = reference_element().num_nodes(this->m_order);
   m_u_tilde_x.resize(numCells * numCellNodes);
   m_u_tilde_y.resize(numCells * numCellNodes);
-  m_workspace_0.resize(numCells * numCellNodes);
+  m_workspace.resize(numCells * numCellNodes);
   m_p.resize(numCells * numCellNodes);
 }
 
@@ -276,7 +317,6 @@ void stokes_2d<M>::exact_solution(double t, ZipItr it) const
   auto itTuple = it.get_iterator_tuple();
   auto itUx = thrust::get<0>(itTuple);
   auto itUy = thrust::get<1>(itTuple);
-  auto itP = thrust::get<2>(itTuple);
 
 #if defined USE_CPU_ONLY
   for (int i = 0; i < this->m_mesh->num_cells(); ++i)
@@ -290,112 +330,57 @@ void stokes_2d<M>::exact_solution(double t, ZipItr it) const
       const point_type pnt = mapping::rs_to_xy(cell, point_type(pos[j].first, pos[j].second)); 
       *itUx++ = std::sin(pnt.x()) * (a * std::sin(a * pnt.y()) - std::cos(a) * std::sinh(pnt.y())) * std::exp(- lamda * t);
       *itUy++ = std::cos(pnt.x()) * (std::cos(a * pnt.y()) + std::cos(a) * std::cosh(pnt.y())) * std::exp(- lamda * t) ;
-      *itP++ = lamda * std::cos(a) * std::cos(pnt.x()) * std::sinh(pnt.y()) * std::exp(- lamda * t);
     }
 }
 
 template<typename M>
 void stokes_2d<M>::pressure_step(double t, double t_prev, double dt,
-                                 const double* u_t_x, const double* u_t_y, const double* u_t_prev_x, const double* u_t_prev_y) const
+                                 const double* u_t_x, const double* u_t_y, const double* u_t_prev_x, const double* u_t_prev_y)
 {
-  // matrix-filling loop - CUDA linear solvers need the matrix A
-  // explicitly as they are direct solvers
-  // TODO: implement an implicit version of the discrete laplace operator
-  // TODO: which returns the matrix and the rhs of the inhomogeneous BC
-  std::vector<std::tuple<int, int, double>> aEntries;
-  for (size_t i = 0; i < m_p.size(); ++i)
-  {
-    std::fill(m_p.begin(), m_p.end(), 0.0);
-    m_p[i] = 1.0;
-
-    // TODO: move the inhomogeneous part of BC to the right-hand-side
-    m_laplace_2d(m_p.begin(), pressure_bc(t + dt, this->m_order, this->Inv_Jacobians.data(), this->m_mesh,
-                                          this->F0_Nodes.data(), this->F1_Nodes.data(), this->F2_Nodes.data(),
-                                          u_t_x, u_t_y, u_t_prev_x, u_t_prev_y));
-
-    for (std::size_t j = 0; j < m_p.size(); ++j)
-      if (std::abs(m_p[j]) > 1e-9) aEntries.push_back(std::make_tuple(j, i, m_p[j]));
-  }
-
-  // convert to csr format
-  std::sort(aEntries.begin(), aEntries.end(),
-       [](const std::tuple<int, int, double>& a, const std::tuple<int, int, double>& b)
-       { return std::get<0>(a) == std::get<0>(b) ? std::get<1>(a) < std::get<1>(b) : std::get<0>(a) < std::get<0>(b); });
-
-  std::vector<int> csrRowPtrA;
-  std::vector<int> csrColIndA;
-  std::vector<double> csrValA;
-  int prev_row = -1;
-  for(int entryIdx = 0; entryIdx < aEntries.size(); ++entryIdx)
-  {
-    auto entry = aEntries[entryIdx];
-    int row = std::get<0>(entry);
-    if (row == prev_row)
-    {
-      csrColIndA.push_back(std::get<1>(entry));
-      csrValA.push_back(std::get<2>(entry));
-    }
-    else
-    {
-      assert(row > prev_row);
-      for (int i = prev_row; i < row; ++i)
-        csrRowPtrA.push_back(csrValA.size());
-      prev_row = row;
-      entryIdx--; // must use signed int for this index as it may become negative when first enter here
-    }
-  }
-  for (int i = csrRowPtrA.size(); i <= m_p.size(); ++i)
-    csrRowPtrA.push_back(csrValA.size());
-  assert(csrValA.size() == aEntries.size());
+  auto aEntries = build_poisson_sys_matrix(m_p, pressure_bc(t + dt, this->m_order, this->Inv_Jacobians.data(),
+                                                            this->m_mesh, this->F0_Nodes.data(), this->F1_Nodes.data(),
+                                                            this->F2_Nodes.data(), u_t_x, u_t_y, u_t_prev_x, u_t_prev_y));
 
   // right-hand-side
-  std::copy(m_u_tilde_x.begin(), m_u_tilde_x.end(), m_workspace_0.begin());
-  m_div_2d(m_workspace_0.begin(), m_u_tilde_y.begin(), u_tilde_bc(t, t_prev));
-  for (std::size_t i = 0; i < m_workspace_0.size(); ++i) m_workspace_0[i] *= 1.5 / dt;
+  std::copy(m_u_tilde_x.begin(), m_u_tilde_x.end(), m_workspace.begin());
+  m_div_2d(m_workspace.begin(), m_u_tilde_y.begin(), u_tilde_bc(t, t_prev));
+  for (std::size_t i = 0; i < m_workspace.size(); ++i) m_workspace[i] *= 1.5 / dt;
 
-  // initialize cuSPARSE
-  cusparseHandle_t handle;
-  cusparseStatus_t cusparse_status = cusparseCreate(&handle);
-  assert(cusparse_status == CUSPARSE_STATUS_SUCCESS);
-
-  // descriptor for sparse matrix A
-  cusparseMatDescr_t descrA;
-  cusparse_status = cusparseCreateMatDescr(&descrA);
-  assert(cusparse_status == CUSPARSE_STATUS_SUCCESS);
-  cusparseSetMatType(descrA, CUSPARSE_MATRIX_TYPE_GENERAL);
-  cusparseSetMatIndexBase(descrA, CUSPARSE_INDEX_BASE_ZERO);
-
-  // cuSPARSE linear solver
-  cusolverSpHandle_t solver_handle;
-  cusolverStatus_t cusolver_status = cusolverSpCreate(&solver_handle);
-  assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
-
-  int singularity;
-  cusolver_status = cusolverSpDcsrlsvqrHost(solver_handle, m_p.size(), csrValA.size(),
-                                            descrA, csrValA.data(), csrRowPtrA.data(), csrColIndA.data(),
-                                            m_workspace_0.data(), 0.00000001, 0, m_p.data(), &singularity);
-
-  assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
-  //assert(singularity < 0);
-
-  cusolver_status = cusolverSpDestroy(solver_handle);
-  assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
+  solve_sys(aEntries, m_workspace, m_p);
 }
 
 template<typename M>
-void stokes_2d<M>::projection_step(double dt) const
+void stokes_2d<M>::projection_step(double dt)
 {
-  m_grad_2d(m_p.begin(), m_workspace_0.begin(), pressure_bc_proj());
+  m_grad_2d(m_p.begin(), m_workspace.begin(), pressure_bc_proj());
   for (std::size_t i = 0; i < m_u_tilde_x.size(); ++i)
   {
     m_u_tilde_x[i] -= 2. * dt * m_p[i] / 3.;
-    m_u_tilde_y[i] -= 2. * dt * m_workspace_0[i] / 3.;
+    m_u_tilde_y[i] -= 2. * dt * m_workspace[i] / 3.;
   }
 }
 
-// t => t + dt
+template<typename M>
+void stokes_2d<M>::viscous_step(double t, double dt)
+{
+  // NOTE: if the inhomogeneous part of the BC was separated out,
+  // NOTE: the same matrix could be used to solve both components
+
+  // x component
+  auto aEntries = build_helmholtz_sys_matrix(dt, m_workspace, u_x_bc(t));
+  std::copy(m_u_tilde_x.begin(), m_u_tilde_x.end(), m_workspace.begin());
+  solve_sys(aEntries, m_workspace, m_u_tilde_x);
+
+  // y component
+  aEntries = build_helmholtz_sys_matrix(dt, m_workspace, u_y_bc(t));
+  std::copy(m_u_tilde_y.begin(), m_u_tilde_y.end(), m_workspace.begin());
+  solve_sys(aEntries, m_workspace, m_u_tilde_y);
+}
+
+// (t_prev, t) => t + dt
 template<typename M> template<typename ConstZipItr, typename ZipItr>
-void stokes_2d<M>::advance_timestep(ConstZipItr in0, ConstZipItr in1, std::size_t size, double t, double t_prev, double dt, ZipItr out) const
+void stokes_2d<M>::advance_timestep(ConstZipItr in0, double t_prev, ConstZipItr in1, double t,
+                                    std::size_t size, double dt, ZipItr out)
 {
   // stage 1: get u_tilde - no convection term in stokes equation
   const auto in0_Tuple = in0.get_iterator_tuple();
@@ -415,6 +400,7 @@ void stokes_2d<M>::advance_timestep(ConstZipItr in0, ConstZipItr in1, std::size_
   projection_step(dt);
 
   // stage 3
+  viscous_step(t, dt);
 
   // output
   const auto out_Tuple = out.get_iterator_tuple();
@@ -422,9 +408,111 @@ void stokes_2d<M>::advance_timestep(ConstZipItr in0, ConstZipItr in1, std::size_
   const auto out_Uy = thrust::get<1>(out_Tuple);
   for (std::size_t i = 0; i < size; ++i)
   {
-    out_Ux[i] = m_u_tilde_x[i]; // TODO: update to results of viscous step
-    out_Uy[i] = m_u_tilde_y[i]; // TODO: update to results of viscous step
+    out_Ux[i] = m_u_tilde_x[i];
+    out_Uy[i] = m_u_tilde_y[i];
   }
+}
+
+template<typename M> template<typename BC>
+std::vector<std::tuple<int, int, double>> stokes_2d<M>::build_poisson_sys_matrix(std::vector<double>& temp, const BC& bc) const
+{
+  std::vector<std::tuple<int, int, double>> aEntries;
+  for (size_t i = 0; i < temp.size(); ++i)
+  {
+    std::fill(temp.begin(), temp.end(), 0.0);
+    temp[i] = 1.0;
+
+    m_laplace_2d(temp.begin(), bc);
+
+    for (std::size_t j = 0; j < temp.size(); ++j)
+      if (std::abs(temp[j]) > 1e-9) aEntries.push_back(std::make_tuple(j, i, temp[j]));
+  }
+  return aEntries;
+}
+
+template<typename M> template<typename BC>
+std::vector<std::tuple<int, int, double>> stokes_2d<M>::build_helmholtz_sys_matrix(double dt, std::vector<double>& temp, const BC& bc) const
+{
+  std::vector<std::tuple<int, int, double>> aEntries;
+  for (size_t i = 0; i < temp.size(); ++i)
+  {
+    std::fill(temp.begin(), temp.end(), 0.0);
+    temp[i] = 1.0;
+
+    m_laplace_2d(temp.begin(), bc);
+
+    for (std::size_t j = 0; j < temp.size(); ++j)
+    {
+      temp[j] *= (- 2. * dt / 3.);
+      if (j == i) temp[j] += 1.0;
+      if (std::abs(temp[j]) > 1e-9) aEntries.push_back(std::make_tuple(j, i, temp[j]));
+    }
+  }
+  return aEntries;
+}
+
+template<typename M>
+void stokes_2d<M>::solve_sys(std::vector<std::tuple<int, int, double>>& matrix, const std::vector<double>& b,
+                             std::vector<double>& x)
+{
+  // convert to csr format
+  std::sort(matrix.begin(), matrix.end(),
+       [](const std::tuple<int, int, double>& a, const std::tuple<int, int, double>& b)
+       { return std::get<0>(a) == std::get<0>(b) ? std::get<1>(a) < std::get<1>(b) : std::get<0>(a) < std::get<0>(b); });
+
+  std::vector<int> csrRowPtrA;
+  std::vector<int> csrColIndA;
+  std::vector<double> csrValA;
+  int prev_row = -1;
+  for(int entryIdx = 0; entryIdx < matrix.size(); ++entryIdx)
+  {
+    auto entry = matrix[entryIdx];
+    int row = std::get<0>(entry);
+    if (row == prev_row)
+    {
+      csrColIndA.push_back(std::get<1>(entry));
+      csrValA.push_back(std::get<2>(entry));
+    }
+    else
+    {
+      assert(row > prev_row);
+      for (int i = prev_row; i < row; ++i)
+        csrRowPtrA.push_back(csrValA.size());
+      prev_row = row;
+      entryIdx--; // must use signed int for this index as it may become negative when first enter here
+    }
+  }
+  for (int i = csrRowPtrA.size(); i <= x.size(); ++i)
+    csrRowPtrA.push_back(csrValA.size());
+  assert(csrValA.size() == matrix.size());
+
+  // initialize cuSPARSE
+  cusparseHandle_t handle;
+  cusparseStatus_t cusparse_status = cusparseCreate(&handle);
+  assert(cusparse_status == CUSPARSE_STATUS_SUCCESS);
+
+  // descriptor for sparse matrix A
+  cusparseMatDescr_t descrA;
+  cusparse_status = cusparseCreateMatDescr(&descrA);
+  assert(cusparse_status == CUSPARSE_STATUS_SUCCESS);
+  cusparseSetMatType(descrA, CUSPARSE_MATRIX_TYPE_GENERAL);
+  cusparseSetMatIndexBase(descrA, CUSPARSE_INDEX_BASE_ZERO);
+
+  // cuSPARSE linear solver
+  cusolverSpHandle_t solver_handle;
+  cusolverStatus_t cusolver_status = cusolverSpCreate(&solver_handle);
+  assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
+
+  int singularity;
+  cusolver_status = cusolverSpDcsrlsvqrHost(solver_handle, x.size(), csrValA.size(),
+                                            descrA, csrValA.data(), csrRowPtrA.data(), csrColIndA.data(),
+                                            b.data(), 0.00000001, 0, x.data(), &singularity);
+
+  assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
+  //assert(singularity < 0);
+
+  cusolver_status = cusolverSpDestroy(solver_handle);
+  assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
 }
 
 #endif
