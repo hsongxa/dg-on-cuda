@@ -181,7 +181,7 @@ void laplace_2d<T, M>::operator()(RandAccItr it, const BC2D& bc) const
 
     // numerical flux of (qx, qy) (p. 275, using tau = 1)
     // note: eqns. 59 and 60 in the 2017 paper give determination of tau per element
-    T dqx, dqy;
+    T dqN;
     const auto cell = this->m_mesh->get_cell(c);
     for (int e = 0; e < 3; ++e)
     {
@@ -201,23 +201,21 @@ void laplace_2d<T, M>::operator()(RandAccItr it, const BC2D& bc) const
         if(isBoundary)
         {
           point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[i]].first, pos[faceNodes[i]].second));
-          T interiorX = *(qxItr + c * numCellNodes + faceNodes[i]);
-          T interiorY = *(qyItr + c * numCellNodes + faceNodes[i]);
-          auto exteriorGradN = bc.exterior_grad_n(xyPos.x(), xyPos.y(), interiorX * n.x() + interiorY * n.y());
-          dqx = interiorX - exteriorGradN * n.x();
-          dqy = interiorY - exteriorGradN * n.y();
+          T interiorGradN = *(qxItr + c * numCellNodes + faceNodes[i]) * n.x() +
+                            *(qyItr + c * numCellNodes + faceNodes[i]) * n.y();
+          auto exteriorGradN = bc.exterior_grad_n(xyPos.x(), xyPos.y(), interiorGradN);
+          dqN = interiorGradN - exteriorGradN;
         }
         else
         {
-          dqx = (*(qxItr + c * numCellNodes + faceNodes[i]) -
-                 *(qxItr + nbCell * numCellNodes + nbFaceNodes[numFaceNodes - i - 1]));
-          dqy = (*(qyItr + c * numCellNodes + faceNodes[i]) -
-                 *(qyItr + nbCell * numCellNodes + nbFaceNodes[numFaceNodes - i - 1]));
+          dqN = (*(qxItr + c * numCellNodes + faceNodes[i]) -
+                 *(qxItr + nbCell * numCellNodes + nbFaceNodes[numFaceNodes - i - 1])) * n.x() +
+                (*(qyItr + c * numCellNodes + faceNodes[i]) -
+                 *(qyItr + nbCell * numCellNodes + nbFaceNodes[numFaceNodes - i - 1])) * n.y();
         }
 
         // similarly, the integration below is due to strong form and the flux used for (qx, qy)
-        toLiftX[eOffset + i] = (n.x() * dqx + n.y() * dqy + const_val<T, 2> * m_du[c * 3 * numFaceNodes + eOffset + i]) *
-                               faceJ / const_val<T, 2>;
+        toLiftX[eOffset + i] = (dqN + const_val<T, 2> * m_du[c * 3 * numFaceNodes + eOffset + i]) * faceJ / const_val<T, 2>;
       }
     }
 

@@ -165,7 +165,7 @@ private:
     double exterior_grad_n(double x, double y, double interior_grad_n) const { return interior_grad_n; }
 
   private:
-    double m_t; // t(n)
+    double m_t; // t(n + 1)
   };
 
   struct u_y_bc
@@ -178,7 +178,7 @@ private:
     double exterior_grad_n(double x, double y, double interior_grad_n) const { return interior_grad_n; }
 
   private:
-    double m_t; // t(n)
+    double m_t; // t(n + 1)
   };
 };
 
@@ -367,12 +367,12 @@ void stokes_2d<M>::viscous_step(double t, double dt)
   // NOTE: the same matrix could be used to solve both components
 
   // x component
-  auto aEntries = build_helmholtz_sys_matrix(dt, m_workspace, u_x_bc(t));
+  auto aEntries = build_helmholtz_sys_matrix(dt, m_workspace, u_x_bc(t + dt));
   std::copy(m_u_tilde_x.begin(), m_u_tilde_x.end(), m_workspace.begin());
   solve_sys(aEntries, m_workspace, m_u_tilde_x);
 
   // y component
-  aEntries = build_helmholtz_sys_matrix(dt, m_workspace, u_y_bc(t));
+  aEntries = build_helmholtz_sys_matrix(dt, m_workspace, u_y_bc(t + dt));
   std::copy(m_u_tilde_y.begin(), m_u_tilde_y.end(), m_workspace.begin());
   solve_sys(aEntries, m_workspace, m_u_tilde_y);
 }
@@ -391,8 +391,8 @@ void stokes_2d<M>::advance_timestep(ConstZipItr in0, double t_prev, ConstZipItr 
   const auto in1_Uy = thrust::get<1>(in1_Tuple);
   for (std::size_t i = 0; i < size; ++i)
   {
-    m_u_tilde_x[i] = dt * (*(in1_Ux + i) * 4. - *(in0_Ux + i)) / 3.;
-    m_u_tilde_y[i] = dt * (*(in1_Uy + i) * 4. - *(in0_Uy + i)) / 3.;
+    m_u_tilde_x[i] = (*(in1_Ux + i) * 4. - *(in0_Ux + i)) / 3.;
+    m_u_tilde_y[i] = (*(in1_Uy + i) * 4. - *(in0_Uy + i)) / 3.;
   }
 
   // stage 2
@@ -425,7 +425,7 @@ std::vector<std::tuple<int, int, double>> stokes_2d<M>::build_poisson_sys_matrix
     m_laplace_2d(temp.begin(), bc);
 
     for (std::size_t j = 0; j < temp.size(); ++j)
-      if (std::abs(temp[j]) > 1e-9) aEntries.push_back(std::make_tuple(j, i, temp[j]));
+      if (std::abs(temp[j]) > 1e-10) aEntries.push_back(std::make_tuple(j, i, temp[j]));
   }
   return aEntries;
 }
@@ -445,7 +445,7 @@ std::vector<std::tuple<int, int, double>> stokes_2d<M>::build_helmholtz_sys_matr
     {
       temp[j] *= (- 2. * dt / 3.);
       if (j == i) temp[j] += 1.0;
-      if (std::abs(temp[j]) > 1e-9) aEntries.push_back(std::make_tuple(j, i, temp[j]));
+      if (std::abs(temp[j]) > 1e-10) aEntries.push_back(std::make_tuple(j, i, temp[j]));
     }
   }
   return aEntries;
@@ -504,12 +504,12 @@ void stokes_2d<M>::solve_sys(std::vector<std::tuple<int, int, double>>& matrix, 
   assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
 
   int singularity;
-  cusolver_status = cusolverSpDcsrlsvqrHost(solver_handle, x.size(), csrValA.size(),
+  cusolver_status = cusolverSpDcsrlsvluHost(solver_handle, x.size(), csrValA.size(),
                                             descrA, csrValA.data(), csrRowPtrA.data(), csrColIndA.data(),
-                                            b.data(), 0.00000001, 0, x.data(), &singularity);
+                                            b.data(), 1e-10, 0, x.data(), &singularity);
 
   assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
-  //assert(singularity < 0);
+  assert(singularity < 0);
 
   cusolver_status = cusolverSpDestroy(solver_handle);
   assert(cusolver_status == CUSOLVER_STATUS_SUCCESS);
