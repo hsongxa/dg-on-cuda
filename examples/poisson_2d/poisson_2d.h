@@ -72,6 +72,7 @@ private:
 private:
   struct dirichlet_bc
   {
+    bool is_dirichlet() const { return true; }
     // see pp. 248-249, also Table 1 of the 2017 paper by N. Fehn et al.
     T exterior_val(T x, T y, T interior_val) const { return - interior_val; }
     T exterior_grad_n(T x, T y, T interior_grad_n) const { return interior_grad_n; }
@@ -191,6 +192,9 @@ void poisson_2d<T, M>::rhs(OutputItr it) const
 template<typename T, typename M> template<typename RandAccItr>
 void poisson_2d<T, M>::operator()(RandAccItr it) const
 {
+  // NOTE: The reason that we can directly call this version of the laplace operator,
+  // NOTE: rather than the version that separates the homogeneous and inhomogeneous
+  // NOTE: parts, is that this particular problem uses homogeneous Dirichlet BC.
   m_laplace_op(it, dirichlet_bc());
 }
 
