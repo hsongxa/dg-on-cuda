@@ -240,16 +240,21 @@ int main(int argc, char **argv) {
 #endif
 
   // output to visualize
-  //std::ofstream file;
-  //file.open("Poisson2DOutputData.txt");
-  //file.precision(std::numeric_limits<double>::digits10);
-  //file << "#             u" << std::endl;
-  //for(int i = 0; i < numNodes; ++i)
-  //  file << i << "  " << u[i] << std::endl;
-  //file << std::endl;
-  //file << "#             ref_u" << std::endl;
-  //for(int i = 0; i < numNodes; ++i)
-  //  file << i << "  " << ref_u[i] << std::endl;
-
+//  thrust::host_vector<double> x(numNodes);
+//  thrust::host_vector<double> y(numNodes);
+//  op.dof_positions(x.begin(), y.begin());
+//
+//  std::ofstream file;
+//  file.open("Poisson2DRefData.txt");
+//  file.precision(std::numeric_limits<double>::digits10);
+//  for(int i = 0; i < numNodes; ++i)
+//    file << x[i] << " " << y[i] << " " << ref_u[i] << std::endl;
+//  file << std::endl;
+//
+//  std::ofstream file1;
+//  file1.open("Poisson2DOutputData.txt");
+//  file1.precision(std::numeric_limits<double>::digits10);
+//  for(int i = 0; i < numNodes; ++i)
+//    file1 << x[i] << " " << y[i] << " " << u[i] << std::endl;
   return 0;
 }

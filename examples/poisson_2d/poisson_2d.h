@@ -42,6 +42,9 @@ public:
 
   poisson_2d(const M& mesh, int order); 
   ~poisson_2d(){}
+
+  template<typename OutputItr>
+  void dof_positions(OutputItr it_x, OutputItr it_y) const;
   
   // note that the layout of DOFs in memory are different for CPU execution and GPU execution
   template<typename OutputItr>
@@ -69,9 +72,10 @@ private:
 private:
   struct dirichlet_bc
   {
+    bool is_dirichlet(T x, T y) const { return true; }
     // see pp. 248-249, also Table 1 of the 2017 paper by N. Fehn et al.
-    T exterior_val(T x, T y, T interior_val) { return - interior_val; }
-    T exterior_grad_n(T x, T y, T interior_grad_n) { return interior_grad_n; }
+    T exterior_val(T x, T y, T interior_val) const { return - interior_val; }
+    T exterior_grad_n(T x, T y, T interior_grad_n) const { return interior_grad_n; }
   };
 };
 
@@ -109,6 +113,31 @@ poisson_2d<T, M>::poisson_2d(const M& mesh, int order)
         mE(eN[row], e * numFaceNodes + col) = eM(row, col);
   }
   m_L = mInv * mE; // need to work with faceJ's and cellJ^-1 later
+}
+
+template<typename T, typename M> template<typename OutputItr>
+void poisson_2d<T, M>::dof_positions(OutputItr it_x, OutputItr it_y) const
+{
+  using point_type = dgc::point_2d<T>;
+  using cell_type = typename M::cell_type;
+
+  reference_element refElem;
+  std::vector<std::pair<T, T>> pos;
+  refElem.node_positions(this->m_order, std::back_inserter(pos));
+
+#if defined USE_CPU_ONLY
+  for (int i = 0; i < this->m_mesh->num_cells(); ++i)
+    for (std::size_t j = 0; j < pos.size(); ++j)
+#else
+  for (std::size_t j = 0; j < pos.size(); ++j)
+    for (int i = 0; i < this->m_mesh->num_cells(); ++i)
+#endif
+    {
+      const cell_type cell = this->m_mesh->get_cell(i);
+      const point_type pnt = mapping::rs_to_xy(cell, point_type(pos[j].first, pos[j].second)); 
+      *it_x++ = pnt.x();
+      *it_y++ = pnt.y();
+    }
 }
 
 template<typename T, typename M> template<typename OutputItr>
@@ -163,6 +192,9 @@ void poisson_2d<T, M>::rhs(OutputItr it) const
 template<typename T, typename M> template<typename RandAccItr>
 void poisson_2d<T, M>::operator()(RandAccItr it) const
 {
+  // NOTE: The reason that we can directly call this version of the laplace operator,
+  // NOTE: rather than the version that separates the homogeneous and inhomogeneous
+  // NOTE: parts, is that this particular problem uses homogeneous Dirichlet BC.
   m_laplace_op(it, dirichlet_bc());
 }
 

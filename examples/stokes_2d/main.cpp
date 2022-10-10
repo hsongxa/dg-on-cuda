@@ -63,7 +63,7 @@ double compute_error_norm(ZipItr it_ref, ZipItr it, int size)
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
 
-  const std::string meshFile = "../square_domain_coarse.msh";
+  const std::string meshFile = "../square_domain_fine.msh";
   const auto meshPtr = dgc::gmsh_importer_exporter<double, int>::import_triangle_mesh_2d(meshFile);
 
   int numCells = meshPtr->num_cells();
@@ -142,10 +142,10 @@ int main(int argc, char **argv) {
   auto it2 = thrust::make_zip_iterator(thrust::make_tuple(Ux2.begin(), Uy2.begin()));
   
   // time advancing loop
-  const double T = 1;
+  const double T = 0.1;
   double t_prev = 0.0;
   double t = 0.0;
-  double dt = 0.01;
+  double dt = 0.001;
 #if !defined USE_CPU_ONLY
   int blockDim = (numCells + blockSize - 1) / blockSize;
 
@@ -164,12 +164,11 @@ int main(int argc, char **argv) {
   auto t0 = std::chrono::system_clock::now();
   while (t < T)
   {
-    std::cout << "t = " << t << std::endl;
     if (t + dt > T) dt = T - t; // the last increment may be less than the pre-defined value
 #if defined USE_CPU_ONLY
     op.advance_timestep(it1, t_prev, it2, t, numNodes, dt, it0);
 #else
-    rk4_on_device(blockDim, blockSize, d_it0, numNodes, t, dt, dOp, d_it1, d_it2, d_it3, d_it4, d_it5);
+    // TODO: GPU code enters here
     cudaDeviceSynchronize();
 #endif
 
@@ -180,6 +179,7 @@ int main(int argc, char **argv) {
     Ux2 = Ux0;
     Uy2 = Uy0;
     t += dt;
+    std::cout << "t = " << t << std::endl;
   }
   auto t1 = std::chrono::system_clock::now();
 
@@ -203,5 +203,20 @@ int main(int argc, char **argv) {
   destroy_device_object(dOp);
 #endif
 
+  // output to visualize
+//  std::ofstream file;
+//  file.open("RefU.txt");
+//  file.precision(std::numeric_limits<double>::digits10);
+//  file << "x         y         ux         uy" << std::endl;
+//  for(int i = 0; i < numNodes; ++i)
+//    file << x[i].x() << "  " << x[i].y() << "  " << Ux_Ref[i] << "  " << Uy_Ref[i] << std::endl;
+//  file << std::endl;
+//  std::ofstream file1;
+//  file1.open("U.txt");
+//  file1.precision(std::numeric_limits<double>::digits10);
+//  file1 << "x         y         ux         uy" << std::endl;
+//  for(int i = 0; i < numNodes; ++i)
+//    file1 << x[i].x() << "  " << x[i].y() << "  " << Ux0[i] << "  " << Uy0[i] << std::endl;
+//  file1 << std::endl;
   return 0;
 }
