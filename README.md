@@ -18,7 +18,7 @@ In the subfolder of each example, there is a PDF file describing the problem, th
 
 Example problems:
 
- - Stokes equation in 2D
+ - GPU execution of the Stokes equation in 2D
  - Incompressible Navier-Stokes equation in 2D
 
 3D problems will be covered by a future repository (`flux-reconstruction-schemes`).

@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
   thrust::device_vector<double> d_outward_normal_Xs = outward_normal_Xs;
   thrust::device_vector<double> d_outward_normal_Ys = outward_normal_Ys;
 
-  d_stokes_2d<double, int>* dOp = create_device_object(numCells, order, op.m_Dr.data(), op.m_Ds.data(), op.m_L.data(),
+  d_stokes_2d<double, int>* dOp = create_device_object(numCells, order,
                                                        d_face_0_nodes, d_face_1_nodes, d_face_2_nodes,
                                                        d_inv_jacobians, d_Js, d_face_Js,
                                                        d_interface_cells, d_interface_faces, num_boundary_nodes,
@@ -193,7 +193,6 @@ int main(int argc, char **argv) {
 #if !defined USE_CPU_ONLY
   Ux0 = d_Ux0;
   Uy0 = d_Uy0;
-  P0 = d_P;
 #endif
   double errNorm = compute_error_norm(it_Ref, it0, numNodes);
   std::cout << "T = " << t << ", error norm = " << errNorm << std::endl;

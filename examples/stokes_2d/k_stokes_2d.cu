@@ -42,7 +42,7 @@ __constant__ double Dr[MAX_NUM_CELL_NODES * MAX_NUM_CELL_NODES];
 __constant__ double Ds[MAX_NUM_CELL_NODES * MAX_NUM_CELL_NODES];
 __constant__ double L[MAX_NUM_CELL_NODES * 3 * MAX_NUM_FACE_NODES];
 
-d_stokes_2d<double, int>* create_device_object(int num_cells, int order, double* dr, double* ds, double* l,
+d_stokes_2d<double, int>* create_device_object(int num_cells, int order,
                                                const DIntVector& face_0_nodes,
                                                const DIntVector& face_1_nodes,
                                                const DIntVector& face_2_nodes,
@@ -60,21 +60,18 @@ d_stokes_2d<double, int>* create_device_object(int num_cells, int order, double*
   assert(num_cells > 0);
   assert(order > 0 && order < 7);
 
-  cudaMemcpyToSymbol(Dr, dr, (order + 1) * (order + 1) * (order + 2) * (order + 2) / 4 * sizeof(double));
-  cudaMemcpyToSymbol(Ds, ds, (order + 1) * (order + 1) * (order + 2) * (order + 2) / 4 * sizeof(double));
-  cudaMemcpyToSymbol(L, l, (order + 1) * (order + 2) * 3 * (order + 1) / 2 * sizeof(double));
-
-  double *d_Dr, *d_Ds, *d_L;
-  cudaGetSymbolAddress((void**)&d_Dr, Dr);
-  cudaGetSymbolAddress((void**)&d_Ds, Ds);
-  cudaGetSymbolAddress((void**)&d_L, L);
+//  cudaMemcpyToSymbol(Dr, dr, (order + 1) * (order + 1) * (order + 2) * (order + 2) / 4 * sizeof(double));
+//  cudaMemcpyToSymbol(Ds, ds, (order + 1) * (order + 1) * (order + 2) * (order + 2) / 4 * sizeof(double));
+//  cudaMemcpyToSymbol(L, l, (order + 1) * (order + 2) * 3 * (order + 1) / 2 * sizeof(double));
+//
+//  double *d_Dr, *d_Ds, *d_L;
+//  cudaGetSymbolAddress((void**)&d_Dr, Dr);
+//  cudaGetSymbolAddress((void**)&d_Ds, Ds);
+//  cudaGetSymbolAddress((void**)&d_L, L);
   
   d_stokes_2d<double, int> tmp;
   tmp.NumCells = num_cells;
   tmp.Order = order;
-  tmp.Dr = d_Dr;
-  tmp.Ds = d_Ds;
-  tmp.L = d_L;
   tmp.Face_0_Nodes = thrust::raw_pointer_cast(face_0_nodes.data());
   tmp.Face_1_Nodes = thrust::raw_pointer_cast(face_1_nodes.data());
   tmp.Face_2_Nodes = thrust::raw_pointer_cast(face_2_nodes.data());
@@ -95,7 +92,7 @@ d_stokes_2d<double, int>* create_device_object(int num_cells, int order, double*
   return dOp;
 }
 
-void rk4_on_device(int gridSize, int blockSize, DZipIterator inout, std::size_t size, double t, double dt,
+void run_on_device(int gridSize, int blockSize, DZipIterator inout, std::size_t size, double t, double dt,
                    d_stokes_2d<double, int>* d_op, DZipIterator wk0, DZipIterator wk1, DZipIterator wk2,
                    DZipIterator wk3, DZipIterator wk4)
 { 
@@ -107,7 +104,7 @@ void rk4_on_device(int gridSize, int blockSize, DZipIterator inout, std::size_t 
   w.m_GridSize = gridSize;
   w.m_BlockSize = blockSize;
 
-  dgc::rk4(inout, size, t, dt, w, &dgc::axpy_n<double, DZipIterator, DZipIterator>, wk0, wk1, wk2, wk3, wk4);
+  // TODO: trigger the kernels here
 }
 
 void destroy_device_object(d_stokes_2d<double, int>* device_obj)
