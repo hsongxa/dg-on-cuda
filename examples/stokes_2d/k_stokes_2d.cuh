@@ -38,7 +38,7 @@ using DDblIterator = DDblVector::iterator;
 using DIteratorTuple = thrust::tuple<DDblIterator, DDblIterator, DDblIterator>;
 using DZipIterator = thrust::zip_iterator<DIteratorTuple>;
 
-d_stokes_2d<double, int>* create_device_object(int num_cells, int order, double* dr, double* ds, double* l,
+d_stokes_2d<double, int>* create_device_object(int num_cells, int order,
                                                const DIntVector& face_0_nodes,
                                                const DIntVector& face_1_nodes,
                                                const DIntVector& face_2_nodes,
@@ -53,7 +53,7 @@ d_stokes_2d<double, int>* create_device_object(int num_cells, int order, double*
                                                const DDblVector& outward_normal_Xs,
                                                const DDblVector& outward_normal_Ys);
 
-void rk4_on_device(int gridSize, int blockSize, DZipIterator inout, std::size_t size, double t, double dt,
+void run_on_device(int gridSize, int blockSize, DZipIterator inout, std::size_t size, double t, double dt,
                    d_stokes_2d<double, int>* d_op, DZipIterator wk0, DZipIterator wk1, DZipIterator wk2,
                    DZipIterator wk3, DZipIterator wk4);
 
