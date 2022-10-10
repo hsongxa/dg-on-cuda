@@ -34,6 +34,13 @@
 BEGIN_NAMESPACE
 
 // discrete laplace operator in two dimensional space using interior penalty method
+// NOTE: (1) This is the "explicit" version of the operator that updates the results
+// NOTE: in-place; a corresponding "implicit" version would build a matrix instead.
+// NOTE: (2) The required API for boundary conditions uses d.o.f.'s position as the
+// NOTE: input. This may not be suffcient - sometimes the same point might belong to
+// NOTE: two different boundarys. In this case, we need additional information, e.g.,
+// NOTE: the patch that each d.o.f. belong to, to uniquely determine its BC, but we
+// NOTE: do not pursue it here.
 template<typename T, typename M> // T - number type, M - mesh type
 class laplace_2d : public simple_discretization_2d<T, M>
 {
@@ -167,8 +174,9 @@ void laplace_2d<T, M>::apply_homogeneous(RandAccItr it, const BC2D& bc) const
       {
         if(isBoundary)
         {
+          point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[i]].first, pos[faceNodes[i]].second));
           T interiorVal = *(it + c * numCellNodes + faceNodes[i]);
-          du = bc.is_dirichlet() ? const_val<T, 2> * interiorVal : const_val<T, 0>;
+          du = bc.is_dirichlet(xyPos.x(), xyPos.y()) ? const_val<T, 2> * interiorVal : const_val<T, 0>;
         }
         else
           du = (*(it + c * numCellNodes + faceNodes[i]) -
@@ -219,9 +227,10 @@ void laplace_2d<T, M>::apply_homogeneous(RandAccItr it, const BC2D& bc) const
       {
         if(isBoundary)
         {
+          point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[i]].first, pos[faceNodes[i]].second));
           T interiorGradN = *(qxItr + c * numCellNodes + faceNodes[i]) * n.x() +
                             *(qyItr + c * numCellNodes + faceNodes[i]) * n.y();
-          dqN = bc.is_dirichlet() ? const_val<T, 0> : const_val<T, 2> * interiorGradN;
+          dqN = bc.is_dirichlet(xyPos.x(), xyPos.y()) ? const_val<T, 0> : const_val<T, 2> * interiorGradN;
         }
         else
         {
@@ -277,8 +286,6 @@ void laplace_2d<T, M>::apply_inhomogeneous_as_rhs(RandAccItr it, const BC2D& bc)
         if(isBoundary)
         {
           const std::vector<int>& faceNodes = e == 0 ? this->F0_Nodes : (e == 1 ? this->F1_Nodes : this->F2_Nodes);
-          const std::vector<int>& nbFaceNodes =
-            nbLocalEdgeIdx == 0 ? this->F0_Nodes : (nbLocalEdgeIdx == 1 ? this->F1_Nodes : this->F2_Nodes);
 
           int eOffset = e * numFaceNodes;
           point_type n = cell.outward_normal(e);
@@ -286,7 +293,7 @@ void laplace_2d<T, M>::apply_inhomogeneous_as_rhs(RandAccItr it, const BC2D& bc)
           for (int i = 0; i < numFaceNodes; ++i)
           {
             point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[i]].first, pos[faceNodes[i]].second));
-            gu = bc.is_dirichlet() ? bc.exterior_val(xyPos.x(), xyPos.y(), const_val<T, 0>) : const_val<T, 0>;
+            gu = bc.is_dirichlet(xyPos.x(), xyPos.y()) ? bc.exterior_val(xyPos.x(), xyPos.y(), const_val<T, 0>) : const_val<T, 0>;
             m_du[c * 3 * numFaceNodes + eOffset + i] = gu; // store for the second pass to use
 
             toLiftX[eOffset + i] = n.x() * gu * faceJ / const_val<T, 2>;
@@ -323,16 +330,13 @@ void laplace_2d<T, M>::apply_inhomogeneous_as_rhs(RandAccItr it, const BC2D& bc)
         if (isBoundary)
         {
           const std::vector<int>& faceNodes = e == 0 ? this->F0_Nodes : (e == 1 ? this->F1_Nodes : this->F2_Nodes);
-          const std::vector<int>& nbFaceNodes =
-            nbLocalEdgeIdx == 0 ? this->F0_Nodes : (nbLocalEdgeIdx == 1 ? this->F1_Nodes : this->F2_Nodes);
 
           int eOffset = e * numFaceNodes;
-          point_type n = cell.outward_normal(e);
           T faceJ = mapping::face_J(cell, e);
           for (int i = 0; i < numFaceNodes; ++i)
           {
             point_type xyPos = mapping::rs_to_xy(cell, point_type(pos[faceNodes[i]].first, pos[faceNodes[i]].second));
-            hq = bc.is_dirichlet() ? const_val<T, 0> : bc.exterior_grad_n(xyPos.x(), xyPos.y(), const_val<T, 0>);
+            hq = bc.is_dirichlet(xyPos.x(), xyPos.y()) ? const_val<T, 0> : bc.exterior_grad_n(xyPos.x(), xyPos.y(), const_val<T, 0>);
 
             toLiftX[eOffset + i] = (hq + const_val<T, 2> * m_du[c * 3 * numFaceNodes + eOffset + i]) * faceJ / const_val<T, 2>;
           }

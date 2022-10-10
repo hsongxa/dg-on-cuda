@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
   const double T = 0.1;
   double t_prev = 0.0;
   double t = 0.0;
-  double dt = 0.1;
+  double dt = 0.001;
 #if !defined USE_CPU_ONLY
   int blockDim = (numCells + blockSize - 1) / blockSize;
 
@@ -162,13 +162,13 @@ int main(int argc, char **argv) {
 #endif
 
   auto t0 = std::chrono::system_clock::now();
-//  while (t < T)
+  while (t < T)
   {
     if (t + dt > T) dt = T - t; // the last increment may be less than the pre-defined value
 #if defined USE_CPU_ONLY
     op.advance_timestep(it1, t_prev, it2, t, numNodes, dt, it0);
 #else
-    rk4_on_device(blockDim, blockSize, d_it0, numNodes, t, dt, dOp, d_it1, d_it2, d_it3, d_it4, d_it5);
+    // TODO: GPU code enters here
     cudaDeviceSynchronize();
 #endif
 
@@ -204,21 +204,19 @@ int main(int argc, char **argv) {
 #endif
 
   // output to visualize
-  std::ofstream file;
-  file.open("RefU.txt");
-  file.precision(std::numeric_limits<double>::digits10);
-  file << "x         y         ux         uy" << std::endl;
-  for(int i = 0; i < numNodes; ++i)
-//    if (x[i].x() > -0.8 && x[i].x() < 0.8 && x[i].y() > -0.8 && x[i].y() < 0.8)
-    file << x[i].x() << "  " << x[i].y() << "  " << Ux_Ref[i] << "  " << Uy_Ref[i] << std::endl;
-  file << std::endl;
-  std::ofstream file1;
-  file1.open("U.txt");
-  file1.precision(std::numeric_limits<double>::digits10);
-  file1 << "x         y         ux         uy" << std::endl;
-  for(int i = 0; i < numNodes; ++i)
-//    if (x[i].x() > -0.8 && x[i].x() < 0.8 && x[i].y() > -0.8 && x[i].y() < 0.8)
-    file1 << x[i].x() << "  " << x[i].y() << "  " << Ux0[i] << "  " << Uy0[i] << std::endl;
-  file1 << std::endl;
+//  std::ofstream file;
+//  file.open("RefU.txt");
+//  file.precision(std::numeric_limits<double>::digits10);
+//  file << "x         y         ux         uy" << std::endl;
+//  for(int i = 0; i < numNodes; ++i)
+//    file << x[i].x() << "  " << x[i].y() << "  " << Ux_Ref[i] << "  " << Uy_Ref[i] << std::endl;
+//  file << std::endl;
+//  std::ofstream file1;
+//  file1.open("U.txt");
+//  file1.precision(std::numeric_limits<double>::digits10);
+//  file1 << "x         y         ux         uy" << std::endl;
+//  for(int i = 0; i < numNodes; ++i)
+//    file1 << x[i].x() << "  " << x[i].y() << "  " << Ux0[i] << "  " << Uy0[i] << std::endl;
+//  file1 << std::endl;
   return 0;
 }

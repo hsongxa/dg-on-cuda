@@ -72,7 +72,7 @@ private:
 private:
   struct dirichlet_bc
   {
-    bool is_dirichlet() const { return true; }
+    bool is_dirichlet(T x, T y) const { return true; }
     // see pp. 248-249, also Table 1 of the 2017 paper by N. Fehn et al.
     T exterior_val(T x, T y, T interior_val) const { return - interior_val; }
     T exterior_grad_n(T x, T y, T interior_grad_n) const { return interior_grad_n; }
