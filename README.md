@@ -13,12 +13,3 @@ The code adopts the "one-thread-per-element" strategy for parallelization - each
 The code contains only header files in the `/src` folder and there is no third-party dependencies except CUDA. A few example problems are provided in the `/examples` folder. To build and run these examples, go to the individual subfolder and run **`make`**. If your CUDA installation directory is different from `/usr/local/cuda-10.2`, change the path of **`CUDA_PATH`** accordingly in the **`makefile`**.
 
 In the subfolder of each example, there is a PDF file describing the problem, the boundary and initial conditions, the analytical solutions (if any), the meshes, and the performance results.
-
-### TO DO
-
-Example problems:
-
- - GPU execution of the Stokes equation in 2D
- - Incompressible Navier-Stokes equation in 2D
-
-3D problems will be covered by a future repository (`flux-reconstruction-schemes`).
