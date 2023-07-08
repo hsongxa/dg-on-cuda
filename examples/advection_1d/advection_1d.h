@@ -103,7 +103,7 @@ advection_1d<T>::advection_1d(int numCells, int order)
   dense_matrix mInv = v * v.transpose();
   T h = s_domainSize / m_numCells;
 
-  // volume integration matrix
+  // volume integration matrix in strong form
   dense_matrix dr = refElem.grad_vandermonde_matrix(m_order) * v.inverse();
   m_D = dr * ((T)(2.0L) / h);
 
